@@ -3,7 +3,7 @@ $(document).ready(function(){
 	'use strict';
 
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var version='1.13.901.2+p9';
+	var version='1.13.901.2+p10';
 
 	//なろうapiにアクセスするときのgetパラメータ
 	var ajax_get_opt = noja_option.ajax_get_opt;
@@ -1621,11 +1621,79 @@ $(document).ready(function(){
 				bgImage = $('<img />').attr('src', bgImage.match(/^url\((.*)\)$/)[1]).bind('load', function(){showPage();}).get(0);
 				bgColor = '#FFFFFF';
 			}
-			title = $('.contents1 > a:eq(0)').text();
+
+			//[なろう:短編]
+			// title: '.novel_title'
+			//    * '.contents1 > a:eq(0)'だとcontents1自体がないので""状態
+			// subtitle: 未調査(概念なし？)
+			// chapter_title: 未調査(概念なし？)
+			// series_title: '.series_title'でa linkと名称
+			//
+			//[なろう:連載]
+			//  title: '.contents1 > a:eq(0)'でOk
+			//  subtitle: '.novel_subtitle'でOk
+			//  chapter_title: '.chapter_title'でOk
+			//  series_title: 未調査
+			//
+			//[のくむん:短編]
+			// title: '.novel_title'
+			//    * '.contents1 > a:eq(0)'だと誤取得して18禁移動リンク部分になる
+			//	  * href属性でチェックし除外して、このケースで誤取得しないように
+			// subtitle: 未調査(概念なし？)
+			// chapter_title: 未調査(概念なし？)
+			// series_title: 未調査('.series_title'でa linkと名称?)
+			//
+			//[のくむん:連載]
+			//  title: '.contents1 > a:eq(0)'でOk
+			//  subtitle: '.novel_subtitle'でOk
+			//  chapter_title: '.chapter_title'でOk
+			//  series_title: 未調査
+			//
+			//[のくむん連載のcontents1の最初]
+			//<div class="contents1">
+			// <span class="attention">R18</span>
+			// <a href="/${ncode}/" class="margin_l10r20">${title}</a>
+			//[のくむん短編のcontents1の最初]
+			//<div class="contents1">
+			// <span class="attention">＜R18＞</span>
+			// 18歳未満の方は<a href="http://syosetu.com">移動</a>してください。
+			//
+			title = $('.contents1 >a:eq(0)').not('a[href="http://syosetu.com"]').text();
 			// 旧構造: ".subtitle > .chapter_title"
-			chapter_title = $('.chapter_title');	// 変更なし
-			subtitle = $('.novel_subtitle');	// 変更なし
-			if(title=='') {
+			chapter_title = $('.chapter_title');	// 変更なしだがsubtitle分離不要
+			subtitle = $('.novel_subtitle');	// 変更なしだがsubtitle分離不要
+
+
+			// [bookmarkトークン取得] ノクターンでは
+			//<ul id="bkm">
+			//<li class="booklist_now">
+			//<a href="http://syosetu.com/favnovelmain18/delete/favncode/${ncode2}/?token=${token}" title="解除">
+			//<img src="http://static.syosetu.com/novelview/img/bkm_on.gif?${不明}"
+			//     width="105" "height=49" />
+			//</a>
+			//</li>
+			//<li class="bookmark">しおり中</li>
+			//</ul>
+			//
+			//<ul id="bkm">
+			//<li class="booklist">
+			//<a href="http://syosetu.com/favnovelmain18/add/favncode/${ncode2}/no/${currentSection}/?token=${token}">
+			//<img src="http://static.syosetu.com/novelview/img/bkm_off.gif?${不明}"
+			//      width="86" height="31" />
+			//</a>
+			//</li>
+			//</ul>
+
+
+			// 関数にするまでもないのだがベタに文字列比較するコードが
+			// 頻発するは気持ちが悪いので…
+			// (本来もう少し上の階層で定義すべきultility functionなのだが…)
+			var is_site_novel18 = function () {
+				return (site.indexOf('http://novel18') >= 0);
+			}
+
+
+			if (title=='') {
 				// 短編
 				title = $('.novel_title').text();	// 先頭改行削除不要
 				subtitle = title;
@@ -1633,8 +1701,12 @@ $(document).ready(function(){
 				currentSection=1;
 				mokuji = null;
 				generalAllNo=1;
-				// 変更なし
-				token = $('div.novel_writername > a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
+				if (is_site_novel18()) {
+					token = $('#bkm a[href^="http://syosetu.com/favnovelmain18/"]');
+				} else {
+					// 変更なし
+					token = $('div.novel_writername > a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
+				}
 				if(token.size()) {
 					login = true;
 					token = token.attr('href').match(/=([0-9a-f]*)$/)[1];
@@ -1646,7 +1718,11 @@ $(document).ready(function(){
 				auther = $('.novel_writername').contents().not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]').text().slice(4, -3);
 			}
 			else {
-				token = $('#novel_contents a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
+				if (is_site_novel18()) {
+					token = $('#bkm a[href^="http://syosetu.com/favnovelmain18/"]');
+				} else {
+					token = $('#novel_contents a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
+				}
 				if(token.size()) {
 					login = true;
 					token = token.attr('href').match(/=([0-9a-f]*)$/)[1];
@@ -1733,6 +1809,10 @@ $(document).ready(function(){
 					.attr('href', site2+'novelreview/list/ncode/'+ncode2+'/')
 				// 元はa:eq(4)の兄弟要素としてafter()で入れていたが
 				// 階層的に変な気がするのでflatに入れるように変更
+				// しおりとお気に入り登録部分
+				// @@TODO@@ のくむんでは個別対応が必要
+				// しおり:表示自体は行われているが機能として正しいか不明
+				// お気に入り:元ページから拾えずundefined状態
 				.end().append(
 					(login
 						? '<div><img src="http://static.syosetu.com/view/images/bookmarker.gif" alt="しおり"><a id="noja_shiori" href="http://syosetu.com/bookmarker/add/ncode/'+ncode2+'/no/'+currentSection+'/?token='+token+'" target="_blank">しおりを挿む</a></div>'
