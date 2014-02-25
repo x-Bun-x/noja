@@ -3,7 +3,7 @@ $(document).ready(function(){
 	'use strict';
 
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var version='1.13.901.2+p8';
+	var version='1.13.901.2+p9';
 
 	//なろうapiにアクセスするときのgetパラメータ
 	var ajax_get_opt = noja_option.ajax_get_opt;
@@ -1527,14 +1527,14 @@ $(document).ready(function(){
 				$('#noja_index > div').html(index);
 				var series = $('#noja_index div.series > a');
 				if(series.size()) series.attr('href', site+series.attr('href').slice(1));
-				// replace style
+				// @@ とりあえずstyle側の修正だけで様子見
+				//$('#noja_index > div > .index_box')
+				//	.css('margin', '')
+				//	.css('width', '')
+				//	;
 				// [オリジナルindex_box]
 				//   margin: 0 auto 30px;
 				//   width: 720px;
-				$('#noja_index > div > .index_box')
-					.css('margin', '')
-					.css('width', '')
-					;
 				var i = 0;
 				$('#noja_index > div > .index_box a')
 					.attr('href', null)
@@ -1646,7 +1646,7 @@ $(document).ready(function(){
 				auther = $('.novel_writername').contents().not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]').text().slice(4, -3);
 			}
 			else {
-				token = $('.novel_contents a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
+				token = $('#novel_contents a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
 				if(token.size()) {
 					login = true;
 					token = token.attr('href').match(/=([0-9a-f]*)$/)[1];
@@ -1717,16 +1717,38 @@ $(document).ready(function(){
 			$('#noja_gothic').prop('checked', fontType==='gothic'); 
 			$('#noja_allpage').prop('checked', allpage); 
 			$('#noja_drag').css('left', slidePos-5);
+			// 元の構造はnoja_view.html側で定義されている
 			$('#noja_link')
 				.find('a:eq(1)')
-					.attr('href', login?'http://syosetu.com/user/top/':'http://syosetu.com/login/input')
-					.text(login?'マイページ':'ログイン')
-				.end().find('a:eq(2)').attr('href', site+'novelview/infotop/ncode/'+ncode+'/')
-				.end().find('a:eq(3)').attr('href', site2+'impression/list/ncode/'+ncode2+'/')
-				.end().find('a:eq(4)').attr('href', site2+'novelreview/list/ncode/'+ncode2+'/')
-				.after((login?'<div><img src="http://static.syosetu.com/view/images/bookmarker.gif" alt="しおり"><a id="noja_shiori" href="http://syosetu.com/bookmarker/add/ncode/'+ncode2+'/no/'+currentSection+'/?token='+token+'" target="_blank">しおりを挿む</a></div>':'')+
-			  (login?('<div>'+$('.novelview_menu > li:contains("登録")').html()+'</div>'):'')+
-			  '<div>'+$('.novelview_menu > li:contains("挿絵")').html()+'</div>');
+					.attr('href', login
+						? 'http://syosetu.com/user/top/'
+						: 'http://syosetu.com/login/input'
+					)
+					.text(login ? 'マイページ' : 'ログイン')
+				.end().find('a:eq(2)')
+					.attr('href', site+'novelview/infotop/ncode/'+ncode+'/')
+				.end().find('a:eq(3)')
+					.attr('href', site2+'impression/list/ncode/'+ncode2+'/')
+				.end().find('a:eq(4)')
+					.attr('href', site2+'novelreview/list/ncode/'+ncode2+'/')
+				// 元はa:eq(4)の兄弟要素としてafter()で入れていたが
+				// 階層的に変な気がするのでflatに入れるように変更
+				.end().append(
+					(login
+						? '<div><img src="http://static.syosetu.com/view/images/bookmarker.gif" alt="しおり"><a id="noja_shiori" href="http://syosetu.com/bookmarker/add/ncode/'+ncode2+'/no/'+currentSection+'/?token='+token+'" target="_blank">しおりを挿む</a></div>'
+						: ''
+					)
+					+
+			  		(login
+			  			? ('<div>'+$('#head_nav > li:contains("登録")').html()+'</div>')
+			  			: ''
+			  		)
+				)
+				// img tagそのものを引っ張ってくるのにhtml()が使えないので
+				// 要素としてつける
+				// after()の戻りはa:ref(4)要素っぽいのでparentにつけないといけないようだ
+				.append($('<div>').append($("#sasieflag").clone()));
+				;
 			$('#noja_version h4').text('のじゃー縦書リーダー ver.'+version);
 			$('#noja_open').bind('click', nojaOpen);
 			$('#noja_close').bind('click', nojaClose);
@@ -2069,7 +2091,12 @@ $(document).ready(function(){
 			});
 			size = {width:800};
 			if(noja_option.appmode) {
-				$('#noja_link').empty().append($('<div style="text-align:right; border-bottom-width:1px; border-bottom-style:solid;"><a id="noja_closelink">[閉じる]</a></div>').bind('click', function() { $('#noja_link').hide(); }));
+				$('#noja_link')
+					.empty()
+					.append(
+						$('<div style="text-align:right; border-bottom-width:1px; border-bottom-style:solid;"><a id="noja_closelink">[閉じる]</a></div>')
+						.bind('click', function() { $('#noja_link').hide(); })
+					);
 				$('#noja_import_container').html('<h4>読み込み</h4><div id="noja_file_back"><input id="noja_file" type="file" value="" accept="text/html, application/zip" multiple="true" ></div><br /><br /><a id="noja_yomikomi">保存・読み込み機能について</a>');
 				$('#noja_saveload_container').append('<br /><a id="noja_booklist">保存した小説リスト</a>');
 				$('#noja_version').append('<br /><br /><a id="noja_kokuhaku">関係のない話</a>');
