@@ -3,7 +3,7 @@ $(document).ready(function(){
 	'use strict';
 
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var version='1.13.901.2';
+	var version='1.13.901.2+p8';
 
 	//なろうapiにアクセスするときのgetパラメータ
 	var ajax_get_opt = noja_option.ajax_get_opt;
@@ -264,8 +264,11 @@ $(document).ready(function(){
 		var col = 0;
 		var len = text.length;
 		var pageData = [];
-		while(space--) pageData.push('');
-		var rb = [[],[],[],[]];
+		var rb = [];
+		while(space--) {
+			pageData.push('');
+			rb.push([]);
+		}
 		var ln = '';
 		var r = [];
 		var del = true;
@@ -306,6 +309,10 @@ $(document).ready(function(){
 						if(col+l>char_num) newLine();
 						ln+=b;
 						var t = $('rt', tt).text();
+						// テンポラリ修正:ルビ内半角数字→全角数字
+						// t = t.replace(/[0-9]/g, function(s) {
+						// 	return String.fromCharCode(s.charCodeAt(0) + 0xFEE0);
+						// });
 						pos=p;
 						r.push([col, l, t]);
 						col+=l;
@@ -513,32 +520,38 @@ $(document).ready(function(){
 					success:function(data) {
 						//読み込んだデータをとりあえずJQueryにぶち込んで解析
 						var contents = $(data);
-						var chapter_title;
+						var chapter_title = $('.chapter_title', contents);
 						//サブタイトル取得
 						var subtitle = $('.novel_subtitle', contents);
 						//章タイトルがあるかどうか判別
 						if($('.chapter_title', subtitle).size()) {
 							//章タイトル取得後、サブタイトルから章タイトルを削除
-							chapter_title = $('.chapter_title', contents).text();
-							subtitle = subtitle.text().substr(chapter_title.length);
+							chapter_title = chapter_title.text();
+							subtitle = subtitle.text();
 						}
 						else {
 							//サブタイトル取得。章タイトルは空文字列
 							subtitle = subtitle.text();
 							chapter_title = '';
 						}
-						auther = $('<div>').html($('.novel_bar', contents).html().replace(/\r|\n/g, '').match(/<span.*?<\/span>(.*)/)[1]).text().slice(3);
+						auther = $('<div>')
+							.html(
+								$('.contents1').html()
+								.replace(/\r|\n/g, '')
+								.match(/作者：(.*)(<p.*?<\/p>)?/)[1]
+							)
+							.text();
 						//前書きデータ取得
-						var maegaki = $('.novel_p > .novel_view', contents).html();
+						var maegaki = $('#novel_p', contents).html();
 						//後書きデータ取得
-						var atogaki = $('.novel_a > .novel_view', contents).html();
+						var atogaki = $('#novel_a', contents).html();
 						var _maegaki = maegaki;
 						var _atogaki = atogaki;
 						loadSection = section;
 						if(maegaki!=null) maegaki=splitPageEx(maegaki, line_num, char_num, 2);
 						if(atogaki!=null) atogaki=splitPageEx(atogaki, line_num, char_num, 2);
 						//本文データ取得
-						var _honbun = $('#novel_view', contents).html();
+						var _honbun = $('#novel_honbun', contents).html();
 						var honbun = splitPage(_honbun, line_num, char_num);
 						//データを登録
 						sections[section] = {
@@ -709,23 +722,60 @@ $(document).ready(function(){
 					size_col += span;
 					y+=span*.5;
 				}
+				// utilities for halfwidth lr-tb
+				var get_halfwidth_string = function (text, pos) {
+					var idx = pos;
+					while (hankaku.indexOf(text[idx]) >= 0) {
+						if (++idx == text.length) {
+							break;
+						}
+					}
+					return text.slice(pos,idx);
+				}
+				var is_beginning_of_halfwidth_string = function (text, pos) {
+					return (pos==0||hankaku.indexOf(text[pos-1])<0);
+				}
+				var is_hankaku_lr_tb_string = function (s) {
+					var nandatte = '!?';
+					var num = '0123456789';
+					if (s == nandatte) {
+						return true;
+					}
+					for (var i = 0; i < s.length; ++i) {
+						if (num.indexOf(s[i]) < 0) {
+							return false;
+						}
+					}
+					return true;
+				}
 				for(var j = 0; j < text.length; ++j) {
 					var ch = text[j];
 					//context.strokeRect(x+size*2, y+size*2, size, size_col);
 					context.save();
 					context.translate(x+size*2, y+size*2.9);
 					if (hankaku.indexOf(ch) >= 0){
-						var nandatte = '!?';
-						var num = '0123456789';
-						if((j==0||hankaku.indexOf(text[j-1])<0)&&
-						((num.indexOf(ch) >= 0&&num.indexOf(text[j+1])>=0)||
-						(nandatte.indexOf(ch) >= 0&&nandatte.indexOf(text[j+1])>=0))&&
-						(j+2==text.length||hankaku.indexOf(text[j+2])<0)){
-							context.translate();
-							context.fillText(ch, 0, 0);
-							ch = text[++j];
-							context.translate(size/2, 0);
-							y+=size_col;
+						// このあたりでルビ内半角の縦中横処理
+						var halfwidth_string = get_halfwidth_string(text,j);
+						//    半角領域先頭
+						// && 半角領域が2文字だけ
+						// && (半角数字2文字 || nandatte)
+						if (is_beginning_of_halfwidth_string(text, j)
+						&& halfwidth_string.length <= 2
+						&& is_hankaku_lr_tb_string (halfwidth_string)
+						){
+							if (halfwidth_string.length == 2) {
+								// translate()引数が全省略でいいのか？
+								// 多分drawText側での"1."等の場合に詰める処理の残滓
+								//context.translate();
+								context.fillText(ch, 0, 0);
+								ch = text[++j];
+								context.translate(size/2, 0);
+								y+=size_col;
+							} else {
+								// 半角数字1文字
+								context.translate(size/4, 0);
+								y+=size_col;
+							}
 						}
 						else {
 							context.translate(size/6, -size*5/6);
@@ -1035,6 +1085,7 @@ $(document).ready(function(){
 	nojaOpen = function() {
 		$('#noja_container').show();
 		$('body').css('overflow', 'hidden');
+		$('#novel_header').hide();
 		onResize();
 		isOpen = true;
 	};
@@ -1045,6 +1096,7 @@ $(document).ready(function(){
 		$('#noja_pages').hide();
 		$('#noja_status').hide();
 		closePopup();
+		$('#novel_header').show();
 		$('body').css('overflow', 'visible');
 		isOpen = false;
 	};
@@ -1267,7 +1319,7 @@ $(document).ready(function(){
 				};
 			}
 			if(mokuji) {
-				data.index = $('<div>').append($(' #noja_index .novel_title, #noja_index .novel_writername, #noja_index .novel_ex, #noja_index .novel_sublist').clone()).html();
+				data.index = $('<div>').append($(' #noja_index .novel_title, #noja_index .novel_writername, #noja_index #novel_ex, #noja_index .index_box').clone()).html();
 			}
 			data.tanpen = mokuji===null;
 			data.generalAllNo = Math.max(generalAllNo, data.generalAllNo);
@@ -1339,7 +1391,7 @@ $(document).ready(function(){
 				mokuji = true;
 				$('#noja_index > div').html(data.index);
 				var i = 0;
-				$('#noja_index > div > .novel_sublist a').each(function(){
+				$('#noja_index > div > .index_box a').each(function(){
 					var ii = ++i;
 					$(this).bind('click', function(){
 						jumpTo(ii, 0);
@@ -1471,12 +1523,20 @@ $(document).ready(function(){
 			success:function(data) {
 				--loading;
 				mokuji=true;
-				var index = $('.novel_title, .novel_writername, .novel_ex, .novel_sublist', data);
+				var index = $('.novel_title, .novel_writername, #novel_ex, .index_box', data);
 				$('#noja_index > div').html(index);
 				var series = $('#noja_index div.series > a');
 				if(series.size()) series.attr('href', site+series.attr('href').slice(1));
+				// replace style
+				// [オリジナルindex_box]
+				//   margin: 0 auto 30px;
+				//   width: 720px;
+				$('#noja_index > div > .index_box')
+					.css('margin', '')
+					.css('width', '')
+					;
 				var i = 0;
-				$('#noja_index > div > .novel_sublist a')
+				$('#noja_index > div > .index_box a')
 					.attr('href', null)
 					.css('cursor', 'pointer')
 					.each(function(){
@@ -1484,8 +1544,8 @@ $(document).ready(function(){
 						$(this).bind('click', function(){
 							jumpTo(ii, 0);
 							$('#noja_index').hide(100);
+						});
 					});
-				});
 				generalAllNo = i;
 				maxSection = i;
 				auther = $('#noja_index .novel_writername').contents().not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]').text().slice(3);
@@ -1514,7 +1574,10 @@ $(document).ready(function(){
 				line_num = Math.floor(17*char_num/40);
 			}
 			$('body').append(lsc(noja_view_html));
-			$('.analog').append('<a id="noja_open" style="cursor:pointer;font-size:'+fontSmall+'; display:block; margin-top:10px;">のじゃー縦書リーダー</a>');
+			// 位置が悪い？
+			// $('#head_nav').append('<li><a id="noja_open" class="menu">のじゃー縦書リーダー</a></li>');
+			$('#novelnavi_right').append('<a id="noja_open" style="cursor:pointer;font-size:'+fontSmall+'; display:block; margin-top:10px;">のじゃー縦書リーダー</a>');
+
 			$('#noja_container').css('font-size', fontSmall);
 			if(noja_option.appmode) {
 				currentSection=1; page=0;
@@ -1550,7 +1613,7 @@ $(document).ready(function(){
 				setting = { ncode:ncode, kaigyou:false, fMaegaki:true, fAtogaki:true };
 				save('ncode', setting);
 			}
-			honbun = $('#novel_color > .novel_view, #novel_contents > .novel_view');
+			honbun = $('#novel_honbun');
 			if(!honbun.size()) return;
 			bgImage = $('body').css('background-image');
 			if(bgImage==='none'||bgImage==='') bgImage=null;
@@ -1558,16 +1621,19 @@ $(document).ready(function(){
 				bgImage = $('<img />').attr('src', bgImage.match(/^url\((.*)\)$/)[1]).bind('load', function(){showPage();}).get(0);
 				bgColor = '#FFFFFF';
 			}
-			title = $('.novel_title2:eq(0)').text();
-			chapter_title = $('.chapter_title');
-			subtitle = $('.novel_subtitle');
+			title = $('.contents1 > a:eq(0)').text();
+			// 旧構造: ".subtitle > .chapter_title"
+			chapter_title = $('.chapter_title');	// 変更なし
+			subtitle = $('.novel_subtitle');	// 変更なし
 			if(title=='') {
-				title = $('.novel_title').text().slice(1,-1);
+				// 短編
+				title = $('.novel_title').text();	// 先頭改行削除不要
 				subtitle = title;
 				chapter_title = '';
 				currentSection=1;
 				mokuji = null;
 				generalAllNo=1;
+				// 変更なし
 				token = $('div.novel_writername > a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
 				if(token.size()) {
 					login = true;
@@ -1580,7 +1646,7 @@ $(document).ready(function(){
 				auther = $('.novel_writername').contents().not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]').text().slice(4, -3);
 			}
 			else {
-				token = $('.novel_bar > a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
+				token = $('.novel_contents a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
 				if(token.size()) {
 					login = true;
 					token = token.attr('href').match(/=([0-9a-f]*)$/)[1];
@@ -1591,24 +1657,30 @@ $(document).ready(function(){
 				}
 				if(chapter_title.size()) {
 					chapter_title = chapter_title.text();
-					subtitle = subtitle.text().substr(chapter_title.length);
+					subtitle = subtitle.text();
 				}
 				else {
-					subtitle = subtitle.text();
 					chapter_title = '';
+					subtitle = subtitle.text();
 				}
 				mokuji = false;
-				auther = $('<div>').html($('.novel_bar').html().replace(/\r|\n/g, '').match(/<span.*?<\/span>(.*)/)[1]).text().slice(3);
-			}	
+				auther = $('<div>')
+					.html(
+						$('.contents1').html()
+						.replace(/\r|\n/g, '')
+						.match(/作者：(.*)(<p.*?<\/p>)?/)[1]
+					)
+					.text();
+			}
 			if(token) noja_option.setToken(token);
-			ncode2 = $('.novelview_menu a[href^="'+site2+'impression/list/ncode/"]').attr('href').match(/([0-9]*)\/$/)[1];
-			honbun = $('#novel_view').eq(0).html();
+			ncode2 = $('#head_nav a[href^="'+site2+'impression/list/ncode/"]').attr('href').match(/([0-9]*)\/$/)[1];
+			honbun = $('#novel_honbun').eq(0).html();
 			loadSection = currentSection;
 			var _honbun = honbun;
-			maegaki = $('.novel_p > .novel_view').eq(0).html();
+			maegaki = $('#novel_p').eq(0).html();
 			var _maegaki = maegaki;
 			if(maegaki!=null) maegaki=splitPageEx(maegaki, line_num, char_num, 2);
-			atogaki = $('.novel_a > .novel_view').eq(0).html();
+			atogaki = $('#novel_a').eq(0).html();
 			var _atogaki = atogaki;
 			if(atogaki!=null) atogaki=splitPageEx(atogaki, line_num, char_num, 2);
 			honbun = splitPage(honbun, line_num, char_num);
@@ -1625,7 +1697,7 @@ $(document).ready(function(){
 			$('#noja_maegaki').prop('checked', setting.fMaegaki); 
 			$('#noja_atogaki').prop('checked', setting.fAtogaki); 
 			$('#noja_kaigyou').prop('checked', setting.kaigyou); 
-			$('.novel_subtitle, #novel_view, .novel_p, .novel_a').attr('data-noja', currentSection);
+			$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a').attr('data-noja', currentSection);
 			fn3();
 		};
 
