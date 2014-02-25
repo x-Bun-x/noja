@@ -1,0 +1,5 @@
+toolbarbutton#noja-button,
+window:not([active="true"]) toolbarbutton#noja-button,
+toolbar[iconsize="small"] toolbarbutton#noja-button {
+	list-style-image: url("resource://noja/images/ico18.png");
+}

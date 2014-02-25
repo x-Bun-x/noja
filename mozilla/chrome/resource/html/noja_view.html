@@ -1,0 +1,120 @@
+<div id="noja_container">
+ <div id="noja_main"><canvas id="noja_canvas_main"></canvas><img /><img /></div>
+ <div id="noja_menu">
+  <div>
+   <span><a id="noja_close" title="のじゃー縦書リーダーを閉じます。ページ移動しない限りいつでも同じ状態で開くことができます。">のじゃー縦書リーダーを閉じる</a></span> 
+   <span><a id="noja_openconfig" title="フォントや改行などの設定ウィンドウを開きます。">表示設定</a></span> 
+   <span><a id="noja_openconfig2" title="自動保存などの設定ウィンドウを開きます。">動作設定</a></span> 
+   <span><a id="noja_opensaveload" title="データの保存と読み込みウィンドウを開きます。">保存・読み込み</a></span> 
+   <span><a id="noja_openhyouka" title="小説評価・感想・レビューのフォームを表示します。">評価・感想</a></span>
+   <span><a id="noja_openlink" title="小説ページ情報や感想などの関連リンク">関連リンク</a></span>
+   <span><a id="noja_openhelp" title="マウスとキーの操作方法">操作方法</a></span>
+   <span><a id="noja_openversion">バージョン情報</a></span>
+  </div>
+ </div>
+ <div id="noja_index"><div></div><a>更新</a></div>
+ <div id="noja_pages"><div></div></div>
+ <div id="noja_status"></div>
+ <div id="noja_config">
+  <div class="noja_close_popup"><a id="noja_closeconfig">[閉じる]</a></div>
+  <div style="text-align:left">
+   <h4 style="text-align:center">表示設定</h4>
+   <div>
+    <div title="前書きを表示します"><input id="noja_maegaki" type="checkbox" /><label for="noja_maegaki">前書きを表示する</label></div>
+    <div title="後書きを表示します"><input id="noja_atogaki" type="checkbox"/><label for="noja_atogaki">後書きを表示する</label></div>
+    <div title="後書きと前書きに枠線を付けます"><input id="noja_layout" type="checkbox" /><label for="noja_layout">レイアウトを変更する</label></div>
+   </div>
+   <div title="フォントを明朝体とゴシック体から選択します">フォントを選択<br />
+    <input type="radio" name="noja_font" id="noja_mincho" /><label for="noja_mincho">明朝体</label><br />
+    <input type="radio" name="noja_font" id="noja_gothic" /><label for="noja_gothic">ゴシック体</label>
+   </div>
+   <div title="二行以上の連続改行を半分にします。">
+    <input type="checkbox" id="noja_kaigyou" /><label for="noja_kaigyou">改行を減らす</label>
+   </div>
+   <div title="下に表示するページ数を一話からの累計ページ数にします。">
+    <input type="checkbox" id="noja_allpage" /><label for="noja_allpage">累計ページ数を表示</label>
+   </div>
+   <div title="横書で表示します。これ縦書リーダーですよ？">
+    <input type="checkbox" id="noja_yokogaki" /><label for="noja_yokogaki">横書表示</label>
+   </div>
+   <div title="文字サイズを変更します">
+    文字サイズ
+    <div id="noja_dragback" style="border-style:inset; border-width:1px; height:2px; background-color:#CCC; width:200px; margin-bottom:10px;">
+     <input id="noja_drag" type="button" value="" style="width:10px; position:relative; height:20px; top:-9px;" /></div>
+    <div id="noja_char_line"></div>
+    <canvas id="noja_charsize"></canvas>
+   </div>
+  </div>
+ </div>
+ <div id="noja_config2">
+  <div class="noja_close_popup"><a id="noja_closeconfig2">[閉じる]</a></div>
+  <div style="text-align:left">
+   <h4 style="text-align:center">動作設定</h4>
+   <div title="チェックしておくとページ読み込み直後にこの画面になります。"><input type="checkbox" id="noja_always_open"/><label for="noja_always_open">常に開く</label></div>
+   <div>
+    <div title="新しい話を読み込んだら自動的に保存します。"><input id="noja_autosave" type="checkbox" /><label for="noja_autosave">自動セーブ</label></div>
+    <div title="ページを開いた時に自動的に保存されたデータを復元します。"><input id="noja_autorestore" type="checkbox"/><label for="noja_autorestore">自動ロード</label></div>
+    <div title="自動保存時には既にデータの存在する話に上書きしません。"><input id="noja_olddata" type="checkbox" /><label for="noja_olddata">過去のデータを優先する</label></div>
+   </div>
+  </div>
+ </div>
+ <div id="noja_saveload">
+  <div class="noja_close_popup"><a id="noja_closesaveload">[閉じる]</a></div>
+  <div id="noja_saveload_container">
+   <h4>セーブ＆ロード</h4>
+   <a id="noja_save" title="読んだ分のデータをデータベースに保存します。以前に保存されたデータがある場合、今回読み込まなかった話はそのままですが、今回読み込んだ話は上書きされます。">セーブ</a><br />
+   <a id="noja_restore" title="保存したデータを今回読み込まなかった範囲だけ読み込みます。">ロード</a>
+  </div>
+  <div>
+   <h4>ダウンロード</h4>
+   <a id="noja_download" title="読み込んだ分をダウンロードします。">ダウンロード(Normal)</a><br />
+   <a id="noja_download2" title="ファイル名に日付けと時刻を追加します。">ダウンロード(DateTime)</a><br />
+   <a id="noja_download3" title="話ごとのダウンロードリンクのリストを作成します。">ダウンロード(個別)</a>
+  </div>
+  <div id="noja_import_container">
+  </div>
+ </div>
+ <div id="noja_link">
+  <div class="noja_close_popup"><a id="noja_closelink">[閉じる]</a></div>
+  <div><a target="_blank"></a></div>
+  <div><a target="_blank">小説情報</a></div>
+  <div><a target="_blank">感想</a></div>
+  <div><a target="_blank">レビュー</a></div>
+ </div>
+ <div id="noja_version">
+  <div class="noja_close_popup"><a id="noja_closeversion">[閉じる]</a></div>
+  <div>
+   <h4></h4>
+   auther:◆TkfnIljons<br />
+   Home Page:<a href="http://naroufav.wkeya.com/noja.html" target="_blank">http://naroufav.wkeya.com/noja.html</a><br /><br/>
+   Includes:<br />
+   jQuery JavaScript Library v2.0.3 <a href="http://jquery.com/" target="_blank">http://jquery.com/</a><br />
+   <br />
+  </div>
+ </div>
+ <div id="noja_help">
+  <div class="noja_close_popup"><a id="noja_closehelp">[閉じる]</a></div>
+  <div>
+   <h4>操作方法</h4>
+   <div style="text-align:left">リーダーの表示／非表示：Escキー<br/>
+   前のページへ移動：画面右側でマウス左クリック／マウスホイール上回転／→キー<br/>
+   次のページへ移動：画面左側でマウス左クリック／マウスホイール下回転／←キー<br/>
+   前の話へ移動：↑キー<br/>
+   次の話へ移動：↓キー<br/>
+   話の先頭へ移動：Page Upキー／Homeキー<br/>
+   話の最後へ移動：Page Downキー／Endキー<br/>
+   メニュー表示：カーソルを上端へ<br/>
+   目次表示：カーソルを左端へ<br/>
+   ページナビゲーション表示：カーソルを右端へ<br/>
+   後書き・前書きの表示・非表示切り替え：Spaceキー<br/>
+   ローカルのデータベースに小説を保存：Ctrl+S<br/>
+   ローカルのデータベースから小説を読み込み：Ctrl+R</div>
+  </div>
+ </div>
+ <div id="noja_hyouka">
+  <div class="noja_close_popup"><a id="noja_closehyouka">[閉じる]</a></div>
+  <div><div><table><tbody><tr><td></td><td></td></tr></tbody></table></div></div>
+ </div>
+ <div id="noja_download_view"><div class="noja_close_popup"><a id="noja_closedv">[閉じる]</a></div><div id="noja_dv_main"></div></div>
+ <div id="noja_booklist_view"></div>
+</div>

@@ -1,0 +1,52 @@
+{
+  "name" : "のじゃー縦書リーダー",
+  "version" : "1.13.901.2",
+  "manifest_version" : 2,
+  "author":"◆TkfnIljons",
+  "homepage_url":"http://naroufav.wkeya.com/noja.html",
+  "description":"小説家になろうに投稿された作品を縦書で閲覧できるようになります",
+  "permissions": [
+    "http://*.syosetu.com/",
+	"tabs",
+	"unlimitedStorage"
+  ],
+  "icons":{
+	"16":"chrome/resource/images/ico16.png",
+	"48":"chrome/resource/images/ico48.png",
+	"128":"chrome/resource/images/ico128.png"
+  },
+  "browser_action": {
+	"default_icon": "chrome/resource/images/ico19.png",
+    "default_title": "のじゃー縦書リーダー"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+		"http://ncode.syosetu.com/N*",
+		"http://ncode.syosetu.com/n*",
+		"http://novel18.syosetu.com/N*",
+		"http://novel18.syosetu.com/n*"
+	  ],
+	  "css": ["chrome/resource/styles/style.css"],
+      "js": [
+		"chrome/content/scripts/jquery.js",
+		"chrome/content/config.js",
+		"chrome/content/scripts/noja.js"
+	  ]
+    }
+  ],
+  "background": {
+	"scripts":["chrome/content/background.js"],
+	"persistent":false
+  },
+  "web_accessible_resources":[
+	"chrome/content/scripts/jquery-2.0.3.min.map",
+	"chrome/resource/images/loading1.gif",
+	"chrome/resource/images/loading2.gif",
+	"chrome/resource/images/twitter_b.gif",
+	"chrome/resource/html/hyouka.html",
+	"chrome/resource/html/hyoukanavi.html",
+	"chrome/resource/html/noja_view.html",
+	"chrome/resource/html/kansou.html"
+  ]
+}

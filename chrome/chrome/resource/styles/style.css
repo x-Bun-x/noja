@@ -1,0 +1,53 @@
+#noja_container{display:none; text-align:center; color:#000; background-color:#FFF;font-family: "メイリオ", "Meiryo", "Hiragino Kaku Gothic Pro", "ヒラギノ角ゴ Pro W3", "sans-serif", "ＭＳ Ｐゴシック"; position:fixed; top:0px; left:0px; right:0px; bottom:0px; }
+.noja_close_popup{text-align:right; border-bottom-width:1px; border-bottom-style:solid;}
+#noja_container a {color:#0033CC; cursor:pointer;}
+#noja_container a:hover {color:#339933; }
+#noja_main{width:100%; height:100%; position:fixed; top:0px; left:0px; right:0px; z-index:100; background-color:#CCC; overflow:hidden}
+#noja_menu{width:100%; position:fixed; top:0px; left:0px; display:none; z-index:103; background-color:#EEE; text-align:left; margin:0px; padding:0px; }
+#noja_menu > div { padding-left:2em; padding-right:2em; }
+#noja_menu > div > span { margin-right:2em; display:inline-block;}
+#noja_index{width:50%; height:100%; position:fixed; overflow-y:scroll; left:0px; top:0px; bottom:0px; background:#FFF; z-index:102; display:none; text-align:center; }
+#noja_index > div {padding:20px;}
+#noja_index > a {position:absolute; left:10px; top:10px;}
+#noja_index .novel_title, #noja_index .novel_writername { width:100%;}
+#noja_index table, #noja_index .novel_ex { width:100%; text-align:left; }
+#noja_pages{height:100%; position:fixed; overflow-y:scroll; right:0px; top:0px; bottom:0px; background:#888; z-index:102; width:200px; display:none; text-align:center; opacity:0.8; color:#FFF;}
+#noja_status{font-size:17px; width:100%; position:fixed; bottom:0px; left:0px; right:0px; display:none; z-index:101; background-color:#000; color:#FFF; text-align:left; opacity:0.5;height:28px; padding:2px;}
+#noja_pages > div > canvas { width:160px; height:113.13708498984760390413509793678px; margin-top:3px; margin-bottom:17px; cursor:pointer; border-width:1px; border-style:solid; }
+#noja_config, #noja_config2 { padding:10px 10px 10px 10px; background-color:#FFF; display:none; position:fixed; border-width:1px; border-style:solid; z-index:105;}
+#noja_link { padding:10px 10px 0px 10px; background-color:#FFF; display:none; position:fixed; border-width:1px; border-style:solid; z-index:105;}
+#noja_help { padding:10px; background-color:#FFF; display:none; position:fixed; top:30%; left:20%; right:20%; border-width:1px; border-style:solid; z-index:105; }
+#noja_version { padding:10px; background-color:#FFF; display:none; position:fixed; top:30%; left:30%; right:30%; border-width:1px; border-style:solid; z-index:105;}
+#noja_hyouka { padding:10px; background-color:#FFF; display:none; top:10%; left:10%; width:80%; height:80%; position:fixed; border-width:1px; border-style:solid; z-index:104;}
+#noja_hyouka > div:nth-child(1) { text-align:right; border-bottom-width:1px; border-bottom-style:solid; top : 10px; left: 10px; right:10px; height : 30px; position:absolute; }
+#noja_hyouka > div:nth-child(2) { top : 40px; left: 10px; bottom: 10px; right:10px; position:absolute; }
+#noja_hyouka > div > div { width : 100%; height: 100%; overflow : scroll; }
+#noja_hyouka table { display:inline-block; }
+#noja_hyouka .novel_hyouka { margin: 0px auto; margin-top: 20px; margin-bottom: 10px; width: 500px; text-align: left; font-size: 80%; line-height: 150%; border: 2px solid #cccccc; background: #ffffff; }
+#noja_hyouka .hyouka_h { margin: 2px; padding: 5px 0px 5px 20px; font-size: 110%; font-weight: bold; background: #eeeefe; }
+#noja_hyouka .InputHidden { display: none; }
+#noja_hyouka .clr { clear: both; }
+#noja_hyouka div.inline span { float: left; }
+#noja_hyouka .RadioboxBigOrb { background: transparent url(http://sbo.syosetu.com/view/images/1coin_off.gif) no-repeat scroll center center; display: block; height: 30px; width: 60px; }
+#noja_hyouka .RadioboxCheckedBigOrb { display: block; width:60px; height:30px; background:transparent url(http://sbo.syosetu.com/view/images/1coin_on.gif) no-repeat scroll center center; }
+#noja_hyouka .RadioboxUncheckedBigOrb { display: block; width:60px; height:30px; background:transparent url(http://sbo.syosetu.com/view/images/1coin_off.gif) no-repeat scroll center center; }
+#noja_hyouka .hyoukanavi { margin: 0px auto; margin-top: 20px; padding: 0px; width: 450px; text-align: left; font-size: 80%; line-height: 150%; }
+#noja_hyouka ul.hyouka li { margin: 0px; padding: 2px 5px 2px 5px; text-decoration: none; list-style: none; color: #000000; float: left; display: block; border: 1px solid #669999; background-color: #ffffff; }
+#noja_hyouka .hyoukalan { margin: 0px auto; padding: 10px 0px 10px 0px; width: 460px; font-size: 80%; line-height: 150%; border: 1px solid #669999; background-color: #ffffff; clear: both; }
+#noja_saveload {background-color:#FFF; padding:10px; display:none; position:fixed; top:10%; width:488px; left:30%; border-width:1px; border-style:solid; z-index:105; }
+#noja_file_back {display:inline-block; width:468px; height:60px; background-image:url("../images/file.png") }
+#noja_file { width:468px; height:60px; opacity:0; cursor:pointer; }
+#noja_download_view {background-color:#FFF; padding:10px; display:none; position:fixed; top:20%; left:20%; right:20%; bottom:20%; border-width:1px; border-style:solid; z-index:105; }
+#noja_booklist_view {text-align:left; background-color:#FFF; padding:10px; display:none; position:fixed; top:20%; left:20%; right:20%; bottom:20%; border-width:1px; border-style:solid; z-index:105; }
+#noja_dv_main{overflow-y:scroll;position:absolute; top:40px; left:10px; right:0px; bottom:10px;}
+#noja_config > div > div, #noja_link div{margin-bottom:10px;}
+#noja_link div, #noja_version div{margin-bottom:10px;}
+#noja_pages > div > canvas.noja_page_select { border-color:#00F; border-width:4px; border-style:solid; margin-top:0px; margin-bottom:14px;}
+div.noja_download_maegaki { padding:10px; border-bottom-width:2px; border-bottom-style:ridge; font-size:15px; text-align:left; }
+div.noja_download_atogaki { padding:10px; border-top-width:2px; border-top-style:ridge; font-size:15px; text-align:left; }
+div.noja_download_honbun { font-size:17px; text-align:left; }
+#noja { padding-bottom:30px; }
+#noja_download_file_main { display:inline-block; }
+#noja_download_file_main > div { width:600px; margin-top:30px; border-top-width:2px; border-top-style:ridge; }
+div.noja_download_chapter_title {font-size:14px; margin-bottom:10px;}
+div.noja_download_subtitle {font-size:20px; margin-bottom:20px;}

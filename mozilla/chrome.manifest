@@ -1,0 +1,6 @@
+content noja chrome/content/
+resource noja chrome/resource/
+skin noja classic/1.0 chrome/skin/
+overlay chrome://browser/content/browser.xul chrome://noja/content/overlay.xul
+style chrome://browser/content/browser.xul chrome://noja/skin/toolbar.css
+style chrome://global/content/customizeToolbar.xul chrome://noja/skin/toolbar.css
