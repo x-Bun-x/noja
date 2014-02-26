@@ -357,8 +357,8 @@ $(document).ready(function(){
 					break;
 				case '゛':
 				case '゜':
-				case '\u3099':
-				case '\u309A':
+				case '\u3099':	// 単独濁点
+				case '\u309A':	// 単独半濁点
 						var target;
 						if(ln==='') {
 							if(pageData.length==0) {
@@ -519,6 +519,7 @@ $(document).ready(function(){
 					//成功
 					success:function(data) {
 						//読み込んだデータをとりあえずJQueryにぶち込んで解析
+						// @@ TODO @@ のくむんだとそのページのしおり関連を拾わないといけない
 						var contents = $(data);
 						var chapter_title = $('.chapter_title', contents);
 						//サブタイトル取得
@@ -635,21 +636,36 @@ $(document).ready(function(){
 		if(sections[section].maegaki!=null&&setting.fMaegaki) len+=sections[section].maegaki[0].length
 		if(sections[section].atogaki!=null&&setting.fAtogaki) len+=sections[section].atogaki[0].length
 		if(p<0) { p += len; }
-		p = p-p%2;
+		// @@ TODO @@ 単ページモード対応
+		p = p-p%2;	// 偶数ページ化(右ページ)
 		if((!f&&p==page)||p>=len||p<0) return;
 		nextPage = p;
 		nextSection = section;
+		// 右sliderのindex部分のcurrentを移動?枠部分のstyle
 		$('#noja_page_'+page).removeClass('noja_page_select').css('border-color', color);
 		page = p;
 		$('#noja_page_'+page).addClass('noja_page_select').css('border-color', '');
 		if(f) {
+			// 話の移動だった場合は情報更新
 			currentSection = section;
 			chapter_title=sections[currentSection].chapter_title;
 			subtitle=sections[currentSection].subtitle;
 			maegaki=sections[currentSection].maegaki;
 			atogaki=sections[currentSection].atogaki;
 			honbun=sections[currentSection].honbun;
-			$('#noja_shiori').attr('href', 'http://syosetu.com/bookmarker/add/ncode/'+ncode2+'/no/'+currentSection+'/?token='+token);
+			// @@TODO@@ のくむんのしおり対応がいる
+			var is_site_novel18 = function () {
+				return (site.indexOf('http://novel18') >= 0);
+			}
+			if (is_site_novel18()) {
+				// formatは分かっているものの…
+				// しおり自体の構成が動的に変動するので扱いが微妙
+				// とりあえず落ちないようにする対策のみ
+				// ここに来る条件が少し不明なり
+				alert('shiori parameterchange @@ TODO @@');
+			} else {
+				$('#noja_shiori').attr('href', 'http://syosetu.com/bookmarker/add/ncode/'+ncode2+'/no/'+currentSection+'/?token='+token);
+			}
 			updateNavigation();
 		}
 		showPage();
@@ -659,6 +675,7 @@ $(document).ready(function(){
 		total = honbun[0].length;
 		if(maegaki!=null&&setting.fMaegaki) total+=maegaki[0].length
 		if(atogaki!=null&&setting.fAtogaki) total+=atogaki[0].length
+		// @@ TODO @@ 単ページ対応
 		for(var i = 0; i < total; i+=2) {
 			(function(){
 				var p = i;
@@ -666,11 +683,14 @@ $(document).ready(function(){
 				$('#noja_pages > div').append('<div>'+(i+1)+'ページ</div>').append($('<canvas id="noja_page_'+i+'" width="'+sumWidth+'px" height="'+sumHeight+'px" style="border-color:'+(i===page?'':color)+'" >').bind('click', function(){ jumpTo(section, p); }));
 				var context2 = $('#noja_page_'+i).get()[0].getContext('2d');
 				context2.font=fontWeight+' '+sum_char+'px '+fontFamilly;
+				// サムネ画面を作る
 				drawPage(context2, sum_char, {width:sumWidth, height:sumHeight}, i, sumWidth/size.width);
 			})();
 		}
 		$('#noja_page_'+page).addClass('noja_page_select');
 	}
+	// @@ TODO @@ 単ページ対応がいる
+	// canvas contextに指定ページを描画する
 	drawPage = function(context, char_size, size, page, bairitu) {
 		if(!bairitu) bairitu = 1;
 		var drawRuby = function(text, x, y, size, col) {
@@ -899,6 +919,7 @@ $(document).ready(function(){
 				}
 			}
 		};
+		// このあたりがソリコア
 		context.fillStyle=bgColor;
 		context.fillRect(0, 0, size.width, size.height);
 		if(bgImage) {
@@ -935,21 +956,26 @@ $(document).ready(function(){
 		var page_base = 0;
 		(function(){
 			if(allpage) {
+				// 全話つなげるならcurrentSection手前までのページ数を計算
 				var j = 0;
 				for(var i = 1; i < currentSection; ++i) {
 					if(!(i in sections)||sections[i]===false) return;
 					j+=sections[i].honbun[0].length;
 					if(setting.fMaegaki&&sections[i]._maegaki!=null) j+=sections[i].maegaki[0].length;
 					if(setting.fAtogaki&&sections[i]._atogaki!=null) j+=sections[i].atogaki[0].length;
-					j+=j%2;
+					j+=j%2;	// @@ TODO @@ 単ページ対応
 				}
 				page_base = j;
 			}
 		})();
+		// tposはsubtitleを書くページ位置
+		// まえがきがあれば前書き終了後の次ページ
 		var tpos = 0;
 		if(maegaki!=null&&setting.fMaegaki) tpos = maegaki[0].length;
 		var apos = tpos+ honbun[0].length;
+		// 左右ページの描画
 		for(var k = page; k < page+2 && k < total; ++k) {
+			// サブタイトル表示
 			if(k==tpos) {
 				context.save();
 				context.font=fontWeight+' '+char_size*1.4+'px '+fontFamilly;
@@ -961,33 +987,63 @@ $(document).ready(function(){
 				else drawText(text, (page+1-k)*size.width/2+char_size*line_num*1.7, char_size*6, char_size*1.4);
 				context.restore();
 			}
+			// 前書き:囲いbox部分のみ先行描画
 			var p;
 			var rb;
 			var yy = 3;
 			if(k<tpos) {
 				p = maegaki[0][k];
 				rb = maegaki[1][k];
-				if(layout) {
-					if(yokogaki) context.strokeRect(size.width/2+char_size*(k!=page?1.5:-(char_num+2.5)), char_size*4.3, char_size*(char_num+1.1), char_size*(line_num*1.7+.7));
-					else context.strokeRect(size.width/2+char_size*(k==page?1.4:-((line_num)*1.7+2)), char_size*4.3, char_size*((line_num)*1.7+0.6), char_size*(char_num-1+.4));
-					if(yokogaki&&k!==page) yy = 2;
-					else yy = 4;
+				if (layout) {
+					// ページ内の充填行数は気にせず最大領域でrect boxを書く
+					if (yokogaki) {
+						context.strokeRect(
+							size.width/2+char_size*(k!=page?1.5:-(char_num+2.5))
+							, char_size*4.3
+							, char_size*(char_num+1.1)
+							, char_size*(line_num*1.7+.7)
+						);
+					} else {
+						context.strokeRect(
+							size.width/2+char_size*(k==page?1.4:-((line_num)*1.7+2))
+							, char_size*4.3
+							, char_size*((line_num)*1.7+0.6)
+							, char_size*(char_num-1+.4)
+						);
+					}
+					yy = (yokogaki && k !== page) ? 2 : 4;
 				}
 			}
+			// 本文
 			else if(k<apos) {
 				p = honbun[0][k-tpos];
 				rb = honbun[1][k-tpos];
 			}
+			// 後書き:囲いbox部分のみ先行描画
 			else {
 				p = atogaki[0][k-apos];
 				rb = atogaki[1][k-apos];
-				if(layout) {
-					if(yokogaki) context.strokeRect(size.width/2+char_size*(k!=page?1.5:-(char_num+2.5)), char_size*4.3, char_size*(char_num+1.1), char_size*(line_num*1.7+.7));
-					else context.strokeRect(size.width/2+char_size*(k==page?1.4:-((line_num)*1.7+2)), char_size*4.3, char_size*((line_num)*1.7+0.6), char_size*(char_num-1+.4));
-					if(yokogaki&&k!==page) yy = 2;
-					else yy = 4;
+				if (layout) {
+					// ページ内の充填行数は気にせず最大領域でrect boxを書く
+					if (yokogaki) {
+						context.strokeRect(
+							size.width/2+char_size*(k!=page?1.5:-(char_num+2.5))
+							, char_size*4.3
+							, char_size*(char_num+1.1)
+							, char_size*(line_num*1.7+.7)
+						);
+					} else {
+						context.strokeRect(
+							size.width/2+char_size*(k==page?1.4:-((line_num)*1.7+2))
+							, char_size*4.3
+							, char_size*((line_num)*1.7+0.6)
+							, char_size*(char_num-1+.4)
+						);
+					}
+					yy = (yokogaki && k !== page) ? 2 : 4;
 				}
 			}
+			// 選んだ領域の該当ページにimgがあった場合の処理
 			if(Object.prototype.toString.call(p).slice(8, -1)==='HTMLImageElement') {
 				var w = p.width*2*bairitu;
 				var h = p.height*2*bairitu;
@@ -1006,6 +1062,7 @@ $(document).ready(function(){
 				context.drawImage(p, (yokogaki?(k-page):(1+page-k))*size.width/2+(size.width/2-w)/2, (size.height-h)/2, w, h);
 				continue;
 			}
+			// 肩領域・ノンブル領域の処理(右ページ)
 			else if(k===page+(yokogaki?1:0)) {
 				if(chapter_title=='') {
 					context.fillText(subtitle, size.width-context.measureText(subtitle).width - char_size*4, char_size*2.5);
@@ -1017,11 +1074,13 @@ $(document).ready(function(){
 				context.fillText(page_base+page+(yokogaki?2:1), size.width-context.measureText(page_base+page+(yokogaki?2:1)).width - char_size*2, size.height-char_size);
 				context.fillRect(size.width/2, 0, .6, size.height);
 			}
+			// 肩領域・ノンブル領域の処理(左ページ)
 			else {
 				context.fillRect(size.width/2-.6, 0, .6, size.height);
 				context.fillText(page_base+page+(yokogaki?1:2), char_size*2, size.height-char_size);
 				context.fillText(title, char_size*4, char_size*2.5);
 			}
+			// 選んだ領域の該当ページの中身部分
 			for(var i = 0; i < p.length; ++i) {
 				if(yokogaki) drawText(p[i], (k===page?char_size*yy:(size.width-char_size*(char_num+yy+2))), char_size*(i*1.7+5), char_size);
 				else drawText(p[i], size.width/2+char_size*(k==page?(line_num-1-i)*1.7+2:-i*1.7-3), char_size*yy, char_size);
@@ -1034,6 +1093,7 @@ $(document).ready(function(){
 		}
 	}
 	showPage = function() {
+		// '#noja_pages #noja_page_${page}'は右スライダー？
 		var context2 = $('#noja_page_'+page).get(0).getContext('2d');
 		context2.font=fontWeight+' '+sum_char+'px '+fontFamilly;
 		drawPage(context, char_size, size, page);
@@ -1054,15 +1114,30 @@ $(document).ready(function(){
 	onResize = function() {
 		size = { width:$('#noja_main').width(), height:$('#noja_main').height()};
 		var style;
-		if(size.width/size.height>Math.sqrt(2)) {
-			var w = size.width;
-			size.width = Math.floor(size.height*Math.sqrt(2));
+		// 親のnoja_mainが
+		//#noja_main {
+		//   width:100%; height:100%;
+		//   position:fixed;
+		//   top:0px; left:0px; right:0px;
+		//  z-index:100; background-color:#CCC; overflow:hidden
+		//}
+		var aspect = Math.sqrt(2);
+		//var aspect = (size.width / size.height);
+		if ((size.width / size.height) > aspect) {
+			// ルート長方形より横長:縦そのままで横補正
+			var modified_width = Math.floor(size.height * aspect);
+			size.width = modified_width;
+			// positionデフォルトなのでstatic指定？
+			// leftのデフォルトはautoなのでセンター？
 			style = {width:size.width, height:size.height, top:'', left:'', position:''};
 		}
 		else {
-			var h = Math.floor(size.width/Math.sqrt(2));
-			style = {width:size.width, height:h, top:((size.height-h)/2), left:0, position:'absolute'};
-			size.height = h;
+			// ルート長方形より縦長:横そのままで縦補正して上マージン設定
+			var modified_height = Math.floor(size.width / aspect);
+			var top_margin = (size.height - modified_height) / 2;
+			size.height = modified_height;
+			// 上下はautoにしてしまうと上に詰まるので半分の位置にマージン設定している
+			style = {width:size.width, height:size.height, top:top_margin, left:0, position:'absolute'};
 		}
 		size.width*=2;
 		size.height*=2;
@@ -1673,6 +1748,10 @@ $(document).ready(function(){
 			//</a>
 			//</li>
 			//<li class="bookmark">しおり中</li>
+			// あるいはここは
+			//<li class="bookmark_now">
+			//<a href="http://syosetu.com/favnovelmain18/ichiupdate/xidfavncode/${usercode}_${ncode2}/no/${currentSection}/?token=${token}">しおり</a>
+			//</li>
 			//</ul>
 			//
 			//<ul id="bkm">
@@ -1794,7 +1873,8 @@ $(document).ready(function(){
 			$('#noja_allpage').prop('checked', allpage); 
 			$('#noja_drag').css('left', slidePos-5);
 			// 元の構造はnoja_view.html側で定義されている
-			$('#noja_link')
+			var linkmenu = $('#noja_link');
+			linkmenu
 				.find('a:eq(1)')
 					.attr('href', login
 						? 'http://syosetu.com/user/top/'
@@ -1807,28 +1887,60 @@ $(document).ready(function(){
 					.attr('href', site2+'impression/list/ncode/'+ncode2+'/')
 				.end().find('a:eq(4)')
 					.attr('href', site2+'novelreview/list/ncode/'+ncode2+'/')
-				// 元はa:eq(4)の兄弟要素としてafter()で入れていたが
-				// 階層的に変な気がするのでflatに入れるように変更
-				// しおりとお気に入り登録部分
-				// @@TODO@@ のくむんでは個別対応が必要
-				// しおり:表示自体は行われているが機能として正しいか不明
-				// お気に入り:元ページから拾えずundefined状態
-				.end().append(
-					(login
-						? '<div><img src="http://static.syosetu.com/view/images/bookmarker.gif" alt="しおり"><a id="noja_shiori" href="http://syosetu.com/bookmarker/add/ncode/'+ncode2+'/no/'+currentSection+'/?token='+token+'" target="_blank">しおりを挿む</a></div>'
-						: ''
-					)
-					+
-			  		(login
-			  			? ('<div>'+$('#head_nav > li:contains("登録")').html()+'</div>')
-			  			: ''
-			  		)
-				)
-				// img tagそのものを引っ張ってくるのにhtml()が使えないので
-				// 要素としてつける
-				// after()の戻りはa:ref(4)要素っぽいのでparentにつけないといけないようだ
-				.append($('<div>').append($("#sasieflag").clone()));
 				;
+
+			var is_site_novel18 = function () {
+				return (site.indexOf('http://novel18') >= 0);
+			}
+
+			// のくむんの新ブックマーク・しおりに対応するため処理を切る
+			//
+			// 元はa:eq(4)の兄弟要素としてafter()で入れていたが
+			// 階層的に変な気がするのでflatに入れるように変更
+			// しおりとお気に入り登録部分
+			// @@TODO@@ のくむんでは個別対応が必要
+			// しおり:表示自体は行われているが機能として正しいか不明
+			// お気に入り:元ページから拾えずundefined状態
+			// のじゃー内でsection移動しても再構成されない
+			// booklist登録有無は問題なし
+			// なろうの場合はしおりはグローバルなので既取得情報から得るurlの一部変更でOk
+			// のくむんの場合は各話なのとしおりページornotでbookmark_nowかどうか変化する
+			// そのあたりを対応しないといけない
+			if (is_site_novel18()) {
+				if (login) {
+					// bookmark&しおりは#bkm内で一連の状態なのでそのままcopyしてしまう
+					// 普通にappendすると移動になるのでcloneする
+					// 多分'#bkm'を指定してscriptが動くことはないと思うが
+					// 一応idを付け替えておく
+					// @@ TODO @@
+					//  '#bkm > img'のサイズをどうするか？
+					// @@ TODO @@
+					//  しおりの左のイメージはどうもcssでbackground指定でつけてるようだ
+					// 一度挟んだしおりは位置は動かせるが削除はできない模様
+					linkmenu.append(
+						$('<div>').append(
+							$('#bkm').clone().attr('id','noja_bkm')
+						)
+					);
+				}
+			} else {
+				// '#noja_shiori'部分は読み込み時に更新する
+				if (login) {
+					linkmenu.append(
+						'<div><img src="http://static.syosetu.com/view/images/bookmarker.gif" alt="しおり"><a id="noja_shiori" href="http://syosetu.com/bookmarker/add/ncode/'+ncode2+'/no/'+currentSection+'/?token='+token+'" target="_blank">しおりを挿む</a></div>'
+					);
+					// 登録済のときは単なるtextで未登録のときはa付のリンクになっている
+					// @@ TODO @@ お気に入り解除のBoomarklet機能をimportするか？
+					linkmenu.append(
+						'<div>'+$('#head_nav > li:contains("登録")').html()+'</div>'
+					);
+				}
+			}
+			// img tagそのものを引っ張ってくるのにhtml()が使えないので
+			// 要素としてつける
+			// @@ TODO @@ clone後のidの変更対応
+			// のじゃー→オリジナル画面で挿絵モード変更→のじゃーのときの状態反映
+			linkmenu.append($('<div>').append($("#sasieflag").clone()));
 			$('#noja_version h4').text('のじゃー縦書リーダー ver.'+version);
 			$('#noja_open').bind('click', nojaOpen);
 			$('#noja_close').bind('click', nojaClose);
