@@ -118,3 +118,65 @@
  <div id="noja_download_view"><div class="noja_close_popup"><a id="noja_closedv">[閉じる]</a></div><div id="noja_dv_main"></div></div>
  <div id="noja_booklist_view"></div>
 </div>
+
+<!-- templates -->
+<div id="noja_templates">
+
+<!-- subtitleとhonbunはノーチェック -->
+<!-- section_no以外は普通に使っているsection objectのprops名そのまま -->
+<script id="noja_download_section_template" type="text/x-jsrender">
+<div id="noja_download_section_{{:section_no}}">
+	{{if _maegaki != null}}
+		<div class="noja_download_maegaki">{{:_maegaki}}</div>
+	{{/if}}
+
+	{{if chapter_title !== ''}}
+		<div class="noja_download_chapter_title">{{:chapter_title}}</div>
+	{{/if}}
+
+	<div class="noja_download_subtitle">{{:subtitle}}</div>
+
+	<div class="noja_download_honbun">{{:_honbun}}</div>
+
+	{{if _atogaki != null}}
+		<div class="noja_download_atogaki">{{:_atogaki}}</div>
+	{{/if}}
+</div>
+</script>
+
+
+<!-- subtitleとhonbunはノーチェック -->
+<!-- section_no以外は普通に使っているsection objectのprops名そのまま -->
+<!-- 旧形式そのままなので修正がいる -->
+<script id="noja_data_section_template" type="text/x-jsrender">
+<div>
+	{{if _maegaki != null}}
+		<div class="novel_p" data-noja="{{:section_no}}">
+			<div class="novel_view">{{:_maegaki}}</div>
+		</div>
+	{{/if}}
+
+	<div class="novel_subtitle" data-noja="{{:section_no}}">
+		{{if chapter_title !== ''}}
+			<div class="chapter_title">{{:chapter_title}}</div>
+		{{/if}}
+		{{:subtitle}}
+	</div>
+
+	<div class="novel_view" id="novel_view" style="{{:style}}" data-noja="{{:section_no}}">
+		{{:_honbun}}
+	</div>
+
+	{{if _atogaki != null}}
+		<div class="novel_a" data-noja="{{:section_no}}">
+			<div class="novel_view">{{:._atogaki}}</div>
+		</div>
+	{{/if}}
+</div>
+</script>
+
+
+
+
+
+</div>

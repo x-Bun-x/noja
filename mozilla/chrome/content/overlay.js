@@ -63,9 +63,31 @@ var onPageLoad = function(e) {
 	var window = e.originalTarget.defaultView.wrappedJSObject;
 	var document = window.document;
 	//なろう、のくむん、アプリケーションページで動作
-	if(document.URL.search(/http:\/\/(ncode|novel18)\.syosetu\.com\/n/) !=0&&document.URL!=='chrome://noja/content/app/index.html') return;
-	
+	// 定義を外部に出したいところだが、どうしよう？
+	var reURLList = [
+		/chrome:\/\/noja\/content\/app\/index\.html/,
+		/http:\/\/(ncode|novel18)\.syosetu\.com\/n/,
+		/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/\d+\/novel_id~\d+/,
+		/http:\/\/novel\.syosetu\.org\/\d+\/\d+\.html/
+	];
+	var matched = false;
+	var url = document.URL;
+	for (var i = 0; i < reURLList.length; ++i) {
+		var re = reURLList[i];
+		if (url.search(re) == 0) {
+			matched = true;
+			break;
+		}
+	}
+	if (!matched) {
+		return;
+	}
+//	if (document.URL.search(/http:\/\/(ncode|novel18)\.syosetu\.com\/n/) != 0
+//		&& document.URL !== 'chrome://noja/content/app/index.html') {
+//		return;
+//	}
 	loadSubScript('chrome://noja/content/scripts/jquery.js', window.content);
+	loadSubScript('chrome://noja/content/scripts/jsrender.js', window.content);
 	loadSubScript('chrome://noja/content/config.js', window.content);
 	window.content.noja_option.loadSubContent = function(url) { return $.ajax({url:url, async:false}).responseText; }
 	window.content.noja_option.save = function(db, data, key) {
