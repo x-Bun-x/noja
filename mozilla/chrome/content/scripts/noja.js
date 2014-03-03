@@ -278,6 +278,22 @@ $(document).ready(function(){
 	//こっから関数の実体定義
 	valid = function(x) { return typeof x !=='undefined'; }
 
+	var getObj = function (selector, ctx, default_value) {
+		default_value = (default_value === undefined) ? null : default_value;
+		var obj = $(selector, ctx);
+		return (obj.size()) ? obj : default_value;
+	}
+	var getHtml = function (selector, ctx, default_value) {
+		default_value = (default_value === undefined) ? null : default_value;
+		var obj = $(selector, ctx);
+		return (obj.size()) ? obj.html() : default_value;
+	}
+	var getText = function (selector, ctx, default_value) {
+		default_value = (default_value === undefined) ? '' : default_value;
+		var obj = $(selector, ctx);
+		return (obj.size()) ? obj.text() : default_value;
+	}
+
 	//////////////////////////////////////////////////////////////////////
 	// そのうちSite定義側に吸収する予定
 	// '{{:site2}}novelpoint/register/ncode/{{:ncode2}}/'
@@ -1167,11 +1183,12 @@ $(document).ready(function(){
 	// @@ TODO @@ のくむんだとそのページのしおり関連を拾わないといけない
 	// 汎用化のためにparse部分を分離
 	// @@ auther再設定だけはグローバルな変数書き換え @@
-	NarouSite.prototype.parseHtmlContents = function(context, section) {
+	NarouSite.prototype.parseHtmlContents = function(htmldoc, section) {
 		// split時にimgタグのurlを収容するのに必要
 		// (parseから呼ばれる)
 		loadSection = section;
-		var contents = context;
+		// できればfindで絞っておく @@ TODO @@
+		var contents = $('<div/>').append($.parseHTML(htmldoc));
 
 		var section_data = {};
 
@@ -1213,11 +1230,63 @@ $(document).ready(function(){
 
 
 	////////////////////////////////////////////////////////
-
-	NocMoonSite.prototype.parseInitialPage = function () {
-		if (!$('#novel_honbun').size()) {
-			return false;
+	NocMoonSite.prototype.updateAutherAtSection = function (contents) {
+		if (this.isSingleSection) {
+			// 短編の場合は'.contents1'以前の領域
+			auther = $('.novel_writername', contents).contents()
+				.not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]')
+				.text().slice(4, -3);
+		} else {
+			// 一応読み込んだものから著者は再設定しておく？
+			// @@ これだけはグローバルな書き換えになる @@
+			// 作者にanchorがない場合もある
+			console.debug(contents);
+			auther = $('<div>')
+				.html(
+					$('.contents1', contents).html()
+					.replace(/\r|\n/g, '')
+					.match(/作者：(.*)(<p.*?<\/p>)?/)[1]
+				)
+				.text();
 		}
+	}
+	//読み込んだデータをとりあえずJQueryにぶち込んで解析
+	// @@ TODO @@ index読み込みの汎用サイト対応化
+	// @@ TODO @@ のくむんだとそのページのしおり関連を拾わないといけない
+	// 汎用化のためにparse部分を分離
+	// @@ auther再設定だけはグローバルな変数書き換え @@
+	NocMoonSite.prototype.parseHtmlCommon = function (contents, section) {
+		this.updateAutherAtSection(contents);
+
+		// split時にimgタグのurlを収容するのに必要
+		// (parseから呼ばれる)
+		loadSection = section;
+		var sec = {};
+
+		if (this.isSingleSection) {
+			sec.chapter_title = '';
+			sec.subtitle = title;
+		} else {
+			sec.chapter_title = getText('.chapter_title', contents);
+			sec.subtitle = getText('.novel_subtitle', contents);
+		}
+
+		//前書きデータ取得
+		sec._maegaki = getHtml('#novel_p', contents);
+		sec.maegaki = splitPageEx(sec._maegaki, line_num, char_num, 2);
+		//後書きデータ取得
+		sec._atogaki = getHtml('#novel_a', contents);
+		sec.atogaki = splitPageEx(sec._atogaki, line_num, char_num, 2);
+		//本文データ取得
+		sec._honbun = getHtml('#novel_honbun', contents);
+		sec.honbun = splitPage(sec._honbun, line_num, char_num);
+		// データオブジェクトを返す
+		return sec;
+	};
+
+
+	////////////////////////////////////////////////////////
+	NocMoonSite.prototype.updateThemeAtSection = function (contents) {
 		bgImage = $('body').css('background-image');
 		if (bgImage === 'none' || bgImage === '') {
 			bgImage = null;
@@ -1228,134 +1297,101 @@ $(document).ready(function(){
 				.get(0);
 			bgColor = '#FFFFFF';
 		}
+	}
 
-		var section_data = {};
+	// 短編と長編でタイトルを取れるdiv領域が違う
+	NocMoonSite.prototype.updateTitleAtSection = function (contents) {
+		if (this.isSingleSection) {
+			title = getText('.novel_title', contents);
+		} else {
+			// タイトルは必ず
+			title = $('.contents1 >a:eq(0)', contents)
+				.not('a[href="http://syosetu.com"]').text();
+		}
+	}
+	NocMoonSite.prototype.parseSectionType = function (contents) {
 		// ここの判定はなんとか変更したいところ
-		// タイトル関連
-		title = $('.contents1 >a:eq(0)').not('a[href="http://syosetu.com"]').text();
-		// 旧構造: ".subtitle > .chapter_title"
-		section_data.chapter_title = $('.chapter_title');	// 変更なしだがsubtitle分離不要
-		section_data.subtitle = $('.novel_subtitle');	// 変更なしだがsubtitle分離不要
+		// タイトル: タイトルアンカーが取れれば連載ページ
+		var t = $('.contents1 >a:eq(0)').not('a[href="http://syosetu.com"]');
+		return (!t.size());
+	}
+	// 絞るべきcontextは'#container'のレベルのようだ
+	// 短編と長編でタイトルを取れるdiv領域が違う等、
+	// これ以上は絞れない
+	NocMoonSite.prototype.setupVolumeInfo = function (contents) {
+		this.isSingleSection = this.parseSectionType();
 
 		// 短編かどうかの判断はtitleが取れたかどうかで行う
 		// title関連の調整とtoken取得等
-		if (title == '') {
+		if (this.isSingleSection) {
 			// 短編
-			title = $('.novel_title').text();	// 先頭改行削除不要
-			section_data.subtitle = title;
-			section_data.chapter_title = '';
-			currentSection = 1;
 			setIndexPageDisabled ();
+			currentSection = 1;
 			generalAllNo = 1;
-			token = $('#bkm a[href^="http://syosetu.com/favnovelmain18/"]');
-			if (token.size()) {
-				login = true;
-				token = token.attr('href').match(/=([0-9a-f]*)$/)[1];
-			} else {
-				login = false;
-				token = null;
-			}
-			auther = $('.novel_writername').contents()
-				.not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]')
-				.text().slice(4, -3);
 		} else {
-			token = $('#bkm a[href^="http://syosetu.com/favnovelmain18/"]');
-			if (token.size()) {
-				login = true;
-				token = token.attr('href').match(/=([0-9a-f]*)$/)[1];
-			} else {
-				login = false;
-				token = null;
-			}
-			if (section_data.chapter_title.size()) {
-				section_data.chapter_title = section_data.chapter_title.text();
-				section_data.subtitle = section_data.subtitle.text();
-			} else {
-				section_data.chapter_title = '';
-				section_data.subtitle = section_data.subtitle.text();
-			}
+			// 連載
 			setIndexPageNotReady();
-			auther = $('<div>')
-				.html(
-					$('.contents1').html()
-					.replace(/\r|\n/g, '')
-					.match(/作者：(.*)(<p.*?<\/p>)?/)[1]
-				)
-				.text();
 		}
+		var t = $('#bkm a[href^="http://syosetu.com/favnovelmain18/"]');
+		token = (t.size()) ? t.attr('href').match(/=([0-9a-f]*)$/)[1] : null;
 		if (token) {
+			login = true;
 			noja_option.setToken(token);
+		} else {
+			login = false;
 		}
-		ncode2 = $('#head_nav a[href^="'+site2+'impression/list/ncode/"]')
-			.attr('href').match(/([0-9]*)\/$/)[1];
+		t = $('#head_nav a[href^="'+site2+'impression/list/ncode/"]');
+		ncode2 = (t.size()) ? t.attr('href').match(/([0-9]*)\/$/)[1] : null;
 
-		// コンテンツの内容の解析
-		loadSection = currentSection;	// splitPageでimg関連で必要になる
+	}
 
-		section_data._honbun = $('#novel_honbun').eq(0).html();
-		section_data.honbun = splitPage(section_data._honbun, line_num, char_num);
-
-		section_data._maegaki = $('#novel_p').eq(0).html();
-		section_data.maegaki = splitPageEx(section_data._maegaki, line_num, char_num, 2);
-
-		section_data._atogaki = $('#novel_a').eq(0).html();
-		section_data.atogaki = splitPageEx(section_data._atogaki, line_num, char_num, 2);
+	NocMoonSite.prototype.parseInitialPage = function () {
+		if (!$('#novel_honbun').size()) {
+			return false;
+		}
+		var contents = $('#container');
+		this.setupVolumeInfo (contents);
+		this.updateThemeAtSection (contents);
+		this.updateAutherAtSection (contents);
+		this.updateTitleAtSection (contents);
 		//
-		sections[currentSection] = section_data;
+		sections[currentSection] = this.parseHtmlCommon(contents, currentSection);
 		//
 		setupCurrentSectionInfo(currentSection);
 		return true;
 	};
 
-	////////////////////////////////////////////////////////
-	//読み込んだデータをとりあえずJQueryにぶち込んで解析
-	// @@ TODO @@ index読み込みの汎用サイト対応化
-	// @@ TODO @@ のくむんだとそのページのしおり関連を拾わないといけない
-	// 汎用化のためにparse部分を分離
-	// @@ auther再設定だけはグローバルな変数書き換え @@
-	NocMoonSite.prototype.parseHtmlContents = function (context, section) {
-		// split時にimgタグのurlを収容するのに必要
-		// (parseから呼ばれる)
-		loadSection = section;
-		var contents = context;
-
-		var section_data = {};
-
-		// 新デザインでは章タイトル・サブタイトルは
-		// 別々に取得できるので分離処理は不要
-		section_data.chapter_title = $('.chapter_title', contents);
-		if (section_data.chapter_title.size()) {
-			section_data.chapter_title = section_data.chapter_title.text();
-		} else {
-			section_data.chapter_title = '';
+	// jQueryでhtml,head,body等を取る必要がある場合は色々細工がいる
+	// それ以外なら仮divにつけてdiv treeからのfindでOk
+	// $(htmldoc).find('#hoge')は'#hoge'がbody直下だった場合に失敗する
+	// $(htmldoc)や$.parseHTML()の戻すものはDOM elem配列であり
+	// jQuery objectではない(&内部的にもnodeの下につける形で
+	// engine側の機能としてparseしているので、
+	// 階層位置がおかしくなるタグはなくなるようだ)
+	// $(htmldoc)の場合も結局完全なtreeではなく
+	// まともに扱える要素の階層での要素配列になっていて、
+	// findが効かないことがある
+	// ($(htmldoc) は $($.parseHTML(htmldoc))で配列をjQuery化している？)
+	// '#container'は'body'直下なので配列の要素に入り、
+	// findは子孫検索であり最上位の配列要素(self)階層のidは探さない
+	// 汎用性を考えると呼出し側で変な加工せずにhtmldocで送ってきて
+	// site parser側がうまく扱うべきだろう
+	// (titleタグからしか情報が取れないとか、
+	// 消える部分の情報がいる場合等を想定してrawで送る)
+	NocMoonSite.prototype.parseHtmlContents = function (htmldoc, section) {
+		// データ取得に必要なcontextに限定して
+		// 最低限そのチェックをしてから呼び出す
+		// '#container'がbody直下のため$('#container',htmldoc)等ではまずい
+		var contents = $('<div/>').append($.parseHTML(htmldoc))
+			.find('#container');
+		// minimum check
+		if (!contents.size()) {
+			console.debug("min check failed");
+			return null;
 		}
-		section_data.subtitle = $('.novel_subtitle', contents);
-		if (section_data.subtitle.size()) {
-			section_data.subtitle = section_data.subtitle.text();
-		} else {
-			section_data.subtitle = '';
-		}
-		// 一応読み込んだものから著者は再設定しておく？
-		// @@ これだけはグローバルな書き換えになる @@
-		auther = $('<div>')
-			.html(
-				$('.contents1', contents).html()
-				.replace(/\r|\n/g, '')
-				.match(/作者：(.*)(<p.*?<\/p>)?/)[1]
-			)
-			.text();
-		//前書きデータ取得
-		section_data._maegaki = $('#novel_p', contents).html();
-		section_data.maegaki = splitPageEx(section_data._maegaki, line_num, char_num, 2);
-		//後書きデータ取得
-		section_data._atogaki = $('#novel_a', contents).html();
-		section_data.atogaki = splitPageEx(section_data._atogaki, line_num, char_num, 2);
-		//本文データ取得
-		section_data._honbun = $('#novel_honbun', contents).html();
-		section_data.honbun = splitPage(section_data._honbun, line_num, char_num);
-		// データオブジェクトを返す
-		return section_data;
-	};
+		// 登録は呼出し元管轄
+		return this.parseHtmlCommon (contents, section);
+	}
 
 	////////////////////////////////////////////////////////
 	//読み込んだデータをとりあえずJQueryにぶち込んで解析
@@ -1487,8 +1523,11 @@ $(document).ready(function(){
 	}
 
 
-	AkatsukiSite.prototype.parseHtmlContents = function(context, section) {
-		var story = $('#contents-inner2 > div.story > div.story');
+	AkatsukiSite.prototype.parseHtmlContents = function(htmldoc, section) {
+		// '#contents-inner2'がbody直下でなければ仮divにつけなくてもよいが
+		// 保守性を考え仮divにつけておく
+		var story = $('<div/>').append($.parseHTML(htmldoc))
+			.find('#contents-inner2 > div.story > div.story');
 		var novels = (story.size()) ? $('div.body-novel', story) : null;
 		// minimum check
 		if (!novels) {
@@ -1657,8 +1696,11 @@ $(document).ready(function(){
 	// @@ TODO @@ のくむんだとそのページのしおり関連を拾わないといけない
 	// 汎用化のためにparse部分を分離
 	// @@ auther再設定だけはグローバルな変数書き換え @@
-	HamelnSite.prototype.parseHtmlContents = function (context, section) {
-		var contents = $('#maind > div.ss:eq(0)', context);
+	HamelnSite.prototype.parseHtmlContents = function (htmldoc, section) {
+		// '#maind'がbody直下でなければ仮divにつけなくてもよいが
+		// 保守性を考え仮divにつけておく
+		var contents = $('<div/>').append($.parseHTML(htmldoc))
+			.find('#maind > div.ss:eq(0)');
 		// minimum check
 		if (!contents.size()) {
 			console.debug("min check failed");
@@ -1739,7 +1781,7 @@ $(document).ready(function(){
 					//成功
 					success: function (data) {
 						//データを登録
-						sections[section] = siteParser.parseHtmlContents($(data), section);
+						sections[section] = siteParser.parseHtmlContents(data, section);
 						autoPagerize(sections[section], section);
 						--loading;
 						//ステータスバーに成功を通知
