@@ -104,12 +104,12 @@ $(document).ready(function(){
 	var thumb_fontsize = thumb_size.height / 48;
 	//ncode.syosetu.com(なろう)かnovel18.syosetu.com(のくむん)
 	//またはダミーでnaroufav.wkeya.com(配布サイト)
-	var site;
+	//var site;
 	//novelcom.syosetu.com(なろう)かnovelcom18.syosetu.com(のくむん)。またはダミーで（ｒｙ
 	//感想・レビュー・評価のサイト
-	var site2;
+	//var site2;
 	//なろうAPIのURL
-	var api;
+	//var api;
 	//のじゃーが起動しているか否かのフラグ
 	var isOpen = false;
 	//読み込み中にセットされるページとセクション番号。
@@ -298,31 +298,25 @@ $(document).ready(function(){
 	// そのうちSite定義側に吸収する予定
 	// '{{:site2}}novelpoint/register/ncode/{{:ncode2}}/'
 	var getNovelPointRegisterURL = function () {
-		return site2+'novelpoint/register/ncode/'+ncode2+'/';
+		return siteParser.site2+'novelpoint/register/ncode/'+ncode2+'/';
 	}
 	// '{{:site2}}impression/confirm/ncode/{{:ncode2}}/'
 	var getImpressionConfirmURL = function () {
-		return site2+'impression/confirm/ncode/'+ncode2+'/';
+		return siteParser.site2+'impression/confirm/ncode/'+ncode2+'/';
 	}
 	// '{{:site2}}impression/list/ncode/{{:ncode2}}/'
 	var getImpressionListURL = function () {
-		return site2+'impression/list/ncode/'+ncode2+'/';
+		return siteParser.site2+'impression/list/ncode/'+ncode2+'/';
 	}
 	// '{{:site2}}novelreview/list/ncode/{{:ncode2}}/'
 	var getNovelReviewListURL = function () {
-		return site2+'novelreview/list/ncode/'+ncode2+'/'
+		return siteParser.site2+'novelreview/list/ncode/'+ncode2+'/'
 	}
 	var getNovelReviewConfirmURL = function () {
-		return site2+'novelreview/confirm/ncode/'+ncode2+'/';
+		return siteParser.site2+'novelreview/confirm/ncode/'+ncode2+'/';
 	}
 	var getNovelViewInfotopURL = function () {
-		return site+'novelview/infotop/ncode/'+ncode+'/';
-	}
-	var getNovelBaseURL = function (section) {
-		return site+ncode+'/';
-	}
-	var getNovelSectionURL = function (section) {
-		return site+ncode+'/'+section+'/';
+		return siteParser.site+'novelview/infotop/ncode/'+ncode+'/';
 	}
 
 	//////////////////////////////////////////////////////////////////////
@@ -334,8 +328,8 @@ $(document).ready(function(){
 		// 
 		currentSection = 1;
 		page = 0;
-		site = 'http://naroufav.wkeya.com/noja/';
-		site2 = 'http://naroufav.wkeya.com/noja/';
+		this.site = 'http://naroufav.wkeya.com/noja/';
+		this.site2 = 'http://naroufav.wkeya.com/noja/';
 	};
 	// AppModeSite.prototype = {
 	//	method_A: function () {}, 
@@ -345,6 +339,18 @@ $(document).ready(function(){
 	AppModeSite.isSupportedURL = function (url) {
 		return (url === 'chrome://noja/content/app/index.html');
 	}
+	AppModeSite.prototype.getNovelBaseURL = function (novel_code) {
+		return this.site + ncode + '/';
+	}
+	AppModeSite.prototype.getNovelIndexURL = function (novel_code) {
+		return this.site + ncode + '/';
+	}
+	AppModeSite.prototype.getNovelSectionURL = function (section) {
+		return this.site + ncode + '/' + section + '/';
+	}
+	AppModeSite.prototype.startAsyncProcess = function () {
+	}
+
 	//////////
 	function NarouSite(url) {
 		this.siteName = NarouSite.siteName;
@@ -352,14 +358,17 @@ $(document).ready(function(){
 		this.enableReputationForm = true;	// @@ ここをfalseにする @@
 
 		//ctorで外部変数を更新するのもナニだがとりあえずそのまま
-		site = 'http://ncode.syosetu.com/';
-		api = 'http://api.syosetu.com/novelapi/api/';
-		site2 = 'http://novelcom.syosetu.com/'
+		this.site = 'http://ncode.syosetu.com/';
+		this.api = 'http://api.syosetu.com/novelapi/api/';
+		this.site2 = 'http://novelcom.syosetu.com/'
 		url.match(/http:\/\/ncode.syosetu.com\/([nN][^\/]*)\/([0-9]*)/);
 		ncode = RegExp.$1.toLowerCase();
 		// 短編のときは$2が空になるはず(=0)
 		currentSection = parseInt(RegExp.$2);
 	};
+	// なろう系の場合は短編の場合、
+	// 作品topページ=コンテンツページなので、
+	// コンテンツページに限定することはできない
 	NarouSite.siteName = '小説家になろう';
 	NarouSite.isSupportedURL = function (url) {
 		return (url.search(
@@ -367,6 +376,17 @@ $(document).ready(function(){
 		) == 0);
 	}
 
+	// その作品のtopページ
+	NarouSite.prototype.getNovelBaseURL = function (novel_code) {
+		return this.site + ncode + '/';
+	}
+	// その作品のindexページ
+	NarouSite.prototype.getNovelIndexURL = function (novel_code) {
+		return this.site + ncode + '/';
+	}
+	NarouSite.prototype.getNovelSectionURL = function (section) {
+		return this.site + ncode + '/' + section + '/';
+	}
 
 	//////////
 	function NocMoonSite(url) {
@@ -375,20 +395,34 @@ $(document).ready(function(){
 		this.enableReputationForm = true;	// @@ ここをfalseにする @@
 
 		//ctorで外部変数を更新するのもナニだがとりあえずそのまま
-		site = 'http://novel18.syosetu.com/';
-		api = 'http://api.syosetu.com/novel18api/api/';
-		site2 = 'http://novelcom18.syosetu.com/'
+		this.site = 'http://novel18.syosetu.com/';
+		this.api = 'http://api.syosetu.com/novel18api/api/';
+		this.site2 = 'http://novelcom18.syosetu.com/'
 		url.match(/http:\/\/novel18.syosetu.com\/([nN][^\/]*)\/([0-9]*)/);
 		ncode = RegExp.$1.toLowerCase();
 		// 短編のときは$2が空になるはず(=0)
 		currentSection = parseInt(RegExp.$2);
 
 	}
+	// なろう系の場合は短編の場合、
+	// 作品topページ=コンテンツページなので、
+	// コンテンツページに限定することはできない
 	NocMoonSite.siteName = 'ノクターン・ムーンライト';
 	NocMoonSite.isSupportedURL = function (url) {
 		return (url.search(
 			/http:\/\/novel18\.syosetu\.com\/n/
 		) == 0);
+	}
+	// その作品のtopページ
+	NocMoonSite.prototype.getNovelBaseURL = function (novel_code) {
+		return this.site + ncode + '/';
+	}
+	// その作品のindexページ
+	NocMoonSite.prototype.getNovelIndexURL = function (novel_code) {
+		return this.site + ncode + '/';
+	}
+	NocMoonSite.prototype.getNovelSectionURL = function (section) {
+		return this.site + ncode + '/' + section + '/';
 	}
 	//////////
 	function AkatsukiSite(url) {
@@ -397,12 +431,22 @@ $(document).ready(function(){
 		this.enableReputationForm = false;
 
 		//ctorで外部変数を更新するのもナニだがとりあえずそのまま
-		site = 'about:blank';
-		api = 'about:blank/';
-		site2 = 'about:blank/'
-		ncode = 'akatsuki_xxx';
-		// 短編のときは$2が空になるはず(=0)
-		currentSection = 1;
+		this.site = 'about:blank';
+		this.api = 'about:blank/';
+		this.site2 = 'about:blank/'
+		url.match(/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/(\d+)\/novel_id~(\d+)/);
+		//ncode = parseInt(RegExp.$2);	// 別に数値にする必然性はない
+		ncode = RegExp.$2;
+		// $1はsection id
+		currentSection = null;	// mapがわからないと対応が取れない
+		this.currentSectionId = RegExp.$1;
+		// 逆方向はjQueryの$.inArray(id, sectioNo2Id)でindexで取る
+		// どうせ初期ページがsectionどこにあたるのかを知るためだけ
+		this.sectionNo2Id = [];
+		// 多分prototypeでobjectが作られてからctorが呼ばれるはずなので
+		// 呼び出して問題ないはず
+		this.indexPages = [];
+		this.fetchIndexPage();
 
 	}
 	AkatsukiSite.siteName = '暁';
@@ -411,24 +455,87 @@ $(document).ready(function(){
 			/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/\d+\/novel_id~\d+/
 		) == 0);
 	}
-	//////////
+	//http://www.akatsuki-novels.com/stories/index/novel_id~{ncode}
+	//http://www.akatsuki-novels.com/stories/index/page~{idx_pg}/novel_id~{ncode}
+	//現1ページ／全16ページ、20件／全306件、1～20件を表示 
+	// これだと20話毎か？
+	// どうも閾値か設定か何かあるようだ
+
+	// こちらはtopページ
+	AkatsukiSite.prototype.getNovelBaseURL = function (novel_id) {
+		novel_id = (novel_id === undefined) ? ncode : novel_id;
+		return "http://www.akatsuki-novels.com/stories/index/novel_id~"+novel_id;
+	}
+
+	// こちらは個別ページ
+	AkatsukiSite.prototype.getNovelIndexURL = function (novel_id, index_page_no) {
+		// index指定なければベースurlにしておく
+		if (index_page_no === undefined) {
+			return this.getNovelBaseURL(novel_id);
+		}
+		// indexがtrueならall list扱いにしたいところだが、
+		// allは読んでみないとわからない
+		novel_id = (novel_id === undefined) ? ncode : novel_id;
+		return 'http://www.akatsuki-novels.com/stories/index/page~'
+			+index_page_no+'/novel_id~'+novel_id;
+	}
+	AkatsukiSite.prototype.getNovelSectionURL = function (section) {
+		return this.site + ncode + '/' + section + '/';
+	}
+
+	////////////////////////////////////////////
 	function HamelnSite(url) {
 		this.siteName = HamelnSite.siteName;
 		this.basePageURL = url;
 		this.enableReputationForm = false;
 
-		site = 'about:blank';
-		api = 'about:blank/';
-		site2 = 'about:blank/'
-		ncode = 'hameln_xxx';
-		// 短編のときは$2が空になるはず(=0)
-		currentSection = 1;
+		this.site = 'http://novel.syosetu.org/';
+		this.api = 'about:blank';
+		this.site2 = 'about:blank'
+
+		// 短編判定と設定はここでしてしまう
+		var m = HamelnSite.reURL.exec(url);
+		if (m) {
+			ncode = m[1];
+			if (!m[2]  || m[2] == 'index.html') {
+				// 中身のparseをしないと区別がつかない
+				// 少なくとも連載ではないので仮設定は短編
+				console.debug("短編 or 目次:", m[2]);
+				this.isShortStory = true;
+				currentSection = 1;
+				generalAllNo = 1;
+				setIndexPageDisabled ();
+			} else {
+				this.isShortStory = false;
+				currentSection = parseInt(m[3]);
+				console.debug("連載:", currentSection);
+				generalAllNo = null;
+				setIndexPageNotReady();
+			}
+		} else {
+			console.debug("!m:", m);
+		}
 	}
+	HamelnSite.reURL = /http:\/\/novel\.syosetu\.org\/(\d+)\/(|index\.html|(\d+)\.html)?/;
+	// ハーメルンの場合は短編の場合、
+	// 作品topページ=コンテンツページなので、
+	// コンテンツページに限定することはできない
 	HamelnSite.siteName = 'ハーメルン';
 	HamelnSite.isSupportedURL = function (url) {
-		return (url.search(
-			/http:\/\/novel\.syosetu\.org\/\d+\/\d+\.html/
-		) == 0);
+		// (m = reURL.exec(URL)) && m.index == 0
+		console.debug("url", url, url.search(HamelnSite.reURL));
+		return (url.search(HamelnSite.reURL) == 0);
+	}
+	// その作品のtopページ
+	HamelnSite.prototype.getNovelBaseURL = function (novel_code) {
+		return this.site + ncode + '/';
+	}
+	// その作品のindexページ
+	HamelnSite.prototype.getNovelIndexURL = function (novel_code) {
+		return this.site + ncode + '/';
+	}
+	HamelnSite.prototype.getNovelSectionURL = function (section) {
+		return this.site + ncode + '/' + section + '.html';
 	}
 	//////////
 	var siteParserList = [
@@ -477,6 +584,11 @@ $(document).ready(function(){
 	//////////////////////////////////////////////////////
 	$.templates('narouShioriURLTmpl'
 		, 'http://syosetu.com/bookmarker/add/ncode/{{:ncode2}}/no/{{:section_no}}/?token={{:token}}');
+
+	NarouSite.prototype.getShioriPrefixURL = function() {
+		return 'http://syosetu.com/bookmarker/add/ncode/';
+	};
+
 
 	NarouSite.prototype.getShioriURL = function(section_no) {
 		section_no = (section_no === undefined) ? currentSection : section_no;
@@ -603,13 +715,6 @@ $(document).ready(function(){
 	var isLastPageInSection = function (page) {
 		return (page >= (total + (total % pages_per_canvas) - pages_per_canvas));
 	}
-
-	// 関数にするまでもないのだがベタに文字列比較するコードが
-	// 頻発するは気持ちが悪いので…
-	// (本来もう少し上の階層で定義すべきultility functionなのだが…)
-	var is_site_novel18 = function () {
-		return (site.indexOf('http://novel18') >= 0);
-	};
 
 
 
@@ -1084,10 +1189,11 @@ $(document).ready(function(){
 	// tokenはpage固有っぽいからglobal state?
 	// 栞関連の一部もそうか？
 	// section,autherはhtml parser側と共通だがその他は独自
-	NarouSite.prototype.parseInitialPage = function () {
-		if (!$('#novel_honbun').size()) {
-			return false;
-		}
+	/////////////
+	// '#container'がcontentsになる
+
+	// これはbodyで拾うので実は次話移動等の部分では使えないが…
+	NarouSite.prototype.updateThemeAtSection = function (contents) {
 		bgImage = $('body').css('background-image');
 		if (bgImage === 'none' || bgImage === '') {
 			bgImage = null;
@@ -1098,136 +1204,209 @@ $(document).ready(function(){
 				.get(0);
 			bgColor = '#FFFFFF';
 		}
+	}
 
-		var section_data = {};
-		// ここの判定はなんとか変更したいところ
-		// タイトル関連
-		title = $('.contents1 >a:eq(0)').not('a[href="http://syosetu.com"]').text();
-		// 旧構造: ".subtitle > .chapter_title"
-		section_data.chapter_title = $('.chapter_title');	// 変更なしだがsubtitle分離不要
-		section_data.subtitle = $('.novel_subtitle');	// 変更なしだがsubtitle分離不要
 
-		// 短編かどうかの判断はtitleが取れたかどうかで行う
-		// title関連の調整とtoken取得等
-		if (title == '') {
-			// 短編
-			title = $('.novel_title').text();	// 先頭改行削除不要
-			section_data.subtitle = title;
-			section_data.chapter_title = '';
-			currentSection = 1;
-			setIndexPageDisabled ();
-			generalAllNo = 1;
-			token = $('div.novel_writername > a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
-			if (token.size()) {
-				login = true;
-				token = token.attr('href').match(/=([0-9a-f]*)$/)[1];
-			} else {
-				login = false;
-				token = null;
-			}
-			auther = $('.novel_writername').contents()
-				.not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]')
+	NarouSite.prototype.updateAutherAtSection = function (contents) {
+		if (this.isSingleSection) {
+			// 短編の場合は'.contents1'以前の領域
+			auther = $('.novel_writername', contents).contents()
+				.not('a[href^="'+this.getShioriPrefixURL()+'"]')
 				.text().slice(4, -3);
 		} else {
-			token = $('#novel_contents a[href^="http://syosetu.com/bookmarker/add/ncode/"]');
-			if (token.size()) {
-				login = true;
-				token = token.attr('href').match(/=([0-9a-f]*)$/)[1];
-			} else {
-				login = false;
-				token = null;
-			}
-			if (section_data.chapter_title.size()) {
-				section_data.chapter_title = section_data.chapter_title.text();
-				section_data.subtitle = section_data.subtitle.text();
-			} else {
-				section_data.chapter_title = '';
-				section_data.subtitle = section_data.subtitle.text();
-			}
-			setIndexPageNotReady();
+			// 一応読み込んだものから著者は再設定しておく？
+			// @@ これだけはグローバルな書き換えになる @@
+			// 作者にanchorがない場合もある
 			auther = $('<div>')
 				.html(
-					$('.contents1').html()
+					$('.contents1', contents).html()
 					.replace(/\r|\n/g, '')
 					.match(/作者：(.*)(<p.*?<\/p>)?/)[1]
 				)
 				.text();
 		}
-		if (token) {
-			noja_option.setToken(token);
+	}
+	// 短編と長編でタイトルを取れるdiv領域が違う
+	NarouSite.prototype.updateTitleAtSection = function (contents) {
+		if (this.isSingleSection) {
+			// 短編
+			title = getText('.novel_title', contents);
+		} else {
+			// 連載
+			// タイトルは必ず
+			title = $('.contents1 >a:eq(0)', contents)
+				.not('a[href="http://syosetu.com"]').text();
 		}
-		ncode2 = $('#head_nav a[href^="'+site2+'impression/list/ncode/"]')
-			.attr('href').match(/([0-9]*)\/$/)[1];
+	}
 
+
+	// ここの判定はなんとか変更したいところ
+	// タイトル: タイトルアンカーが取れれば連載ページ
+	NarouSite.prototype.parseSectionType = function (contents) {
+		var t = $('.contents1 >a:eq(0)').not('a[href="http://syosetu.com"]');
+		console.debug(t);
+		return (!t.size());
+	}
+	// 絞るべきcontextは'#container'のレベルのようだ
+	// 短編と長編でタイトルを取れるdiv領域が違う等、
+	// これ以上は絞れない
+	NarouSite.prototype.setupVolumeInfo = function (contents) {
+		this.isSingleSection = this.parseSectionType();
+
+		// 短編かどうかの判断はtitleが取れたかどうかで行う
+		// title関連の調整とtoken取得等
+		if (this.isSingleSection) {
+			// 短編
+			setIndexPageDisabled ();
+			currentSection = 1;
+			generalAllNo = 1;
+		} else {
+			// 連載
+			setIndexPageNotReady();
+		}
+		// なろうの場合は短編と連載でトークンの取る位置が違う？
+		var t;
+		if (this.isSingleSection) {
+			t = $('div.novel_writername > a[href^="'+this.getShioriPrefixURL()+'"]');
+		} else {
+			t = $('#novel_contents a[href^="'+this.getShioriPrefixURL()+'"]');
+		}
+		token = (t.size()) ? t.attr('href').match(/=([0-9a-f]*)$/)[1] : null;
+		if (token) {
+			login = true;
+			noja_option.setToken(token);
+		} else {
+			login = false;
+		}
+		t = $('#head_nav a[href^="' + this.site2 + 'impression/list/ncode/"]');
+		ncode2 = (t.size()) ? t.attr('href').match(/([0-9]*)\/$/)[1] : null;
+	}
+
+	NarouSite.prototype.parseHtmlCommon = function (contents, section) {
+		this.updateAutherAtSection (contents);
 		// コンテンツの内容の解析
 		loadSection = currentSection;	// splitPageでimg関連で必要になる
+		var sec = {};
+		if (this.isSingleSection) {
+			// 短編
+			sec.chapter_title = '';
+			sec.subtitle = title;
+		} else {
+			// 連載
+			sec.chapter_title = getText('.chapter_title', contents);
+			sec.subtitle = getText('.novel_subtitle', contents);
+		}
 
-		section_data._honbun = $('#novel_honbun').eq(0).html();
-		section_data.honbun = splitPage(section_data._honbun, line_num, char_num);
+		sec._maegaki = getHtml('#novel_p', contents);
+		sec.maegaki = splitPageEx(sec._maegaki, line_num, char_num, 2);
 
-		section_data._maegaki = $('#novel_p').eq(0).html();
-		section_data.maegaki = splitPageEx(section_data._maegaki, line_num, char_num, 2);
+		sec._atogaki = getHtml('#novel_a', contents);
+		sec.atogaki = splitPageEx(sec._atogaki, line_num, char_num, 2);
 
-		section_data._atogaki = $('#novel_a').eq(0).html();
-		section_data.atogaki = splitPageEx(section_data._atogaki, line_num, char_num, 2);
+		sec._honbun = getHtml('#novel_honbun', contents);
+		sec.honbun = splitPage(sec._honbun, line_num, char_num);
+
+		return sec;
+	}
+
+
+	////////////////////////////////////////////////////////
+	// のじゃーが張り付いた初期ページの解析
+	NarouSite.prototype.parseInitialPage = function () {
+		if (!$('#novel_honbun').size()) {
+			return false;
+		}
+		var contents = $('#container');
+		this.setupVolumeInfo (contents);
+		this.updateThemeAtSection (contents);
+		this.updateTitleAtSection (contents);
+
 		//
-		sections[currentSection] = section_data;
+		sections[currentSection] = this.parseHtmlCommon (contents, currentSection);
 		//
 		setupCurrentSectionInfo(currentSection);
 		return true;
 	};
 
 	////////////////////////////////////////////////////////
-	//読み込んだデータをとりあえずJQueryにぶち込んで解析
-	// @@ TODO @@ index読み込みの汎用サイト対応化
-	// @@ TODO @@ のくむんだとそのページのしおり関連を拾わないといけない
-	// 汎用化のためにparse部分を分離
-	// @@ auther再設定だけはグローバルな変数書き換え @@
+	// ページ遷移時に読み込んだhtmldocの解析
 	NarouSite.prototype.parseHtmlContents = function(htmldoc, section) {
-		// split時にimgタグのurlを収容するのに必要
-		// (parseから呼ばれる)
-		loadSection = section;
-		// できればfindで絞っておく @@ TODO @@
-		var contents = $('<div/>').append($.parseHTML(htmldoc));
-
-		var section_data = {};
-
-		// 新デザインでは章タイトル・サブタイトルは
-		// 別々に取得できるので分離処理は不要
-		section_data.chapter_title = $('.chapter_title', contents);
-		if (section_data.chapter_title.size()) {
-			section_data.chapter_title = section_data.chapter_title.text();
-		} else {
-			section_data.chapter_title = '';
+		// データ取得に必要なcontextに限定して
+		// 最低限そのチェックをしてから呼び出す
+		// '#container'がbody直下のため$('#container',htmldoc)等ではまずい
+		var contents = $('<div/>').append($.parseHTML(htmldoc))
+			.find('#container');
+		// minimum check
+		if (!contents.size()) {
+			console.debug("min check failed");
+			return null;
 		}
-		section_data.subtitle = $('.novel_subtitle', contents);
-		if (section_data.subtitle.size()) {
-			section_data.subtitle = section_data.subtitle.text();
-		} else {
-			section_data.subtitle = '';
-		}
-		// 一応読み込んだものから著者は再設定しておく？
-		// @@ これだけはグローバルな書き換えになる @@
-		auther = $('<div>')
-			.html(
-				$('.contents1', contents).html()
-				.replace(/\r|\n/g, '')
-				.match(/作者：(.*)(<p.*?<\/p>)?/)[1]
-			)
-			.text();
-		//前書きデータ取得
-		section_data._maegaki = $('#novel_p', contents).html();
-		section_data.maegaki = splitPageEx(section_data._maegaki, line_num, char_num, 2);
-		//後書きデータ取得
-		section_data._atogaki = $('#novel_a', contents).html();
-		section_data.atogaki = splitPageEx(section_data._atogaki, line_num, char_num, 2);
-		//本文データ取得
-		section_data._honbun = $('#novel_honbun', contents).html();
-		section_data.honbun = splitPage(section_data._honbun, line_num, char_num);
-		// データオブジェクトを返す
-		return section_data;
+		// 登録は呼出し元管轄
+		return this.parseHtmlCommon (contents, section);
 	};
 
+
+	///////////////////////////////////////////
+	NarouSite.prototype.loadIndex = function (postprocess) {
+		$.ajax({
+			url: this.getNovelIndexURL(),
+			success: function(data) {
+				var index = $('.novel_title, .novel_writername, #novel_ex, .index_box'
+					, data);
+				$('#noja_index > div').html(index);
+
+				var a_series = $('#noja_index div.series > a');
+				if (a_series.size()) {
+					a_series.attr('href', this.site + a_series.attr('href').slice(1));
+				}
+				// @@ とりあえずstyle側の修正だけで様子見
+				//$('#noja_index > div > .index_box')
+				//	.css('margin', '')
+				//	.css('width', '')
+				//	;
+				// [オリジナルindex_box]
+				//   margin: 0 auto 30px;
+				//   width: 720px;
+				var total_sec_no = 0;
+				$('#noja_index > div > .index_box a')
+					.attr('href', null)
+					.css('cursor', 'pointer')
+					.each(function(){
+						var sec_no = ++total_sec_no;
+						$(this).bind('click', function(){
+							jumpTo(sec_no, 0);
+							$('#noja_index').hide(100);
+						});
+					});
+				auther = $('#noja_index .novel_writername')
+					.contents()
+					.not('a[href^="'+this.getShioriPrefixURL()+'"]')
+					.text().slice(3);
+				postprocess (total_sec_no);
+			},
+			error: function() {
+				postprocess (false);
+			}
+		});
+	}
+
+	//ajaxでなろう小説APIからデータを受け取る
+	// データタイプはjsonなのでdecodeされてdataのpropになっている?
+	NarouSite.prototype.loadMaxSectionNo = function (post_process) {
+		$.ajax({
+			url: siteParser.api + ajax_get_opt + ncode,
+			dataType: ajax_data_type,
+			//成功
+			success: function (data) {
+				post_process (parseInt (data[1].general_all_no));
+			},
+			error: function(data) {
+				post_process (false);
+			}
+		});
+	}
+	NarouSite.prototype.startAsyncProcess = function () {
+	}
 
 	////////////////////////////////////////////////////////
 	NocMoonSite.prototype.updateAutherAtSection = function (contents) {
@@ -1240,7 +1419,6 @@ $(document).ready(function(){
 			// 一応読み込んだものから著者は再設定しておく？
 			// @@ これだけはグローバルな書き換えになる @@
 			// 作者にanchorがない場合もある
-			console.debug(contents);
 			auther = $('<div>')
 				.html(
 					$('.contents1', contents).html()
@@ -1340,7 +1518,7 @@ $(document).ready(function(){
 		} else {
 			login = false;
 		}
-		t = $('#head_nav a[href^="'+site2+'impression/list/ncode/"]');
+		t = $('#head_nav a[href^="' + this.site2 + 'impression/list/ncode/"]');
 		ncode2 = (t.size()) ? t.attr('href').match(/([0-9]*)\/$/)[1] : null;
 
 	}
@@ -1352,7 +1530,6 @@ $(document).ready(function(){
 		var contents = $('#container');
 		this.setupVolumeInfo (contents);
 		this.updateThemeAtSection (contents);
-		this.updateAutherAtSection (contents);
 		this.updateTitleAtSection (contents);
 		//
 		sections[currentSection] = this.parseHtmlCommon(contents, currentSection);
@@ -1393,10 +1570,68 @@ $(document).ready(function(){
 		return this.parseHtmlCommon (contents, section);
 	}
 
+	NocMoonSite.prototype.loadIndex = function (postprocess) {
+		$.ajax({
+			url: this.getNovelIndexURL(),
+			success: function(data) {
+				var index = $('.novel_title, .novel_writername, #novel_ex, .index_box'
+					, data);
+				$('#noja_index > div').html(index);
+				var a_series = $('#noja_index div.series > a');
+				if (a_series.size()) {
+					a_series.attr('href', this.site + a_series.attr('href').slice(1));
+				}
+				// @@ とりあえずstyle側の修正だけで様子見
+				//$('#noja_index > div > .index_box')
+				//	.css('margin', '')
+				//	.css('width', '')
+				//	;
+				// [オリジナルindex_box]
+				//   margin: 0 auto 30px;
+				//   width: 720px;
+				var total_sec_no = 0;
+				$('#noja_index > div > .index_box a')
+					.attr('href', null)
+					.css('cursor', 'pointer')
+					.each(function() {
+						var sec_no = ++total_sec_no;
+						$(this).bind('click', function(){
+							jumpTo(sec_no, 0);
+							$('#noja_index').hide(100);
+						});
+					});
+				auther = $('#noja_index .novel_writername')
+					.contents()
+					.not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]')
+					.text().slice(3);
+				postprocess (total_sec_no);
+			},
+			error: function() {
+				postprocess (false);
+			}
+		});
+	}
+
+	//ajaxでなろう小説APIからデータを受け取る
+	// データタイプはjsonなのでdecodeされてdataのpropになっている?
+	NocMoonSite.prototype.loadMaxSectionNo = function (post_process) {
+		$.ajax({
+			url: siteParser.api + ajax_get_opt + ncode,
+			dataType: ajax_data_type,
+			//成功
+			success: function (data) {
+				post_process (parseInt (data[1].general_all_no));
+			},
+			error: function(data) {
+				post_process (false);
+			}
+		});
+	}
+
+	NocMoonSite.prototype.startAsyncProcess = function () {
+	}
+
 	////////////////////////////////////////////////////////
-	//読み込んだデータをとりあえずJQueryにぶち込んで解析
-	// @@ TODO @@ index読み込みの汎用サイト対応化
-	// 汎用化のためにparse部分を分離
 	// @@ auther再設定だけはグローバルな変数書き換え @@
 	AkatsukiSite.prototype.parseHtmlCommon = function(story, novels, section) {
 		// globalなautherは再設定される
@@ -1548,10 +1783,12 @@ $(document).ready(function(){
 			console.debug("min check failed");
 			return false;
 		}
-		// 解析した中身によって本来変更すべきもの
+		// [強制短編設定]
 		currentSection = 1;
 		setIndexPageDisabled ();
 		generalAllNo = 1;
+		// その他
+		// 解析した中身によって本来変更すべきもの
 		login = false;
 		token = null;
 		ncode2 = null;
@@ -1567,7 +1804,108 @@ $(document).ready(function(){
 		return true;
 	}
 
+	// 暁には全話表示モードもあるがそれはサポートしない
+	// indexが20話毎という話だったが何故かallになっている
+	//http://www.akatsuki-novels.com/stories/index/novel_id~6791
+	// この場合でもpage~1でページは取れる
+	// linkがあるかどうかで判定するしかないか？
+	// タグ等の有無で判定できるかも
+	// 'div.paging' or "div.paging-top"があるかないか？
+	// pagingは常にlastのlinkがあるのでmax数は分かる
+	// (last pageは分かる)
+	// 
+	//
+	AkatsukiSite.prototype.loadIndex = function (postprocess) {
+		$.ajax({
+			url: this.getNovelIndexURL(),
+			success: function(data) {
+				// とりあえず作者部分は放置,storyも放置
+				var index = $('#LookNovel, div.story table.list', data);
+				$('#noja_index > div').html(index);
+				// シリーズ？
+				//var a_series = $('#noja_index div.series > a');
+				//if (a_series.size()) {
+				//	a_series.attr('href', this.site + a_series.attr('href').slice(1));
+				//}
+				//http://www.akatsuki-novels.com/stories/view/${section_id}/novel_id~${novel_id}
+				// build dict: sec_no => sec_id
+				// 
+				this.sectionMap = {};
+				var total_sec_no = 0;
+				var a = $('#noja_index > div > table.list a');
+				a.attr('href', null)
+					.css('cursor', 'pointer')
+					.each(function() {
+						var sec_no = ++total_sec_no;
+						$(this).bind('click', function(){
+							jumpTo(sec_no, 0);
+							$('#noja_index').hide(100);
+						});
+					});
+				//auther = $('#noja_index .novel_writername')
+				//	.contents()
+				//	.not('a[href^="'+this.getShioriPrefixURL()+'"]')
+				//	.text().slice(3);
+				postprocess (total_sec_no);
+			},
+			error: function() {
+				postprocess (false);
+			}
+		});
+	}
 
+	// 非同期にmaxだけもらうことはできないのでloadIndexする
+	// callbackの仕様が同一なのでそのままrelayするだけ?
+	// と思ったが折角loadIndexするのでready設定はすべき
+	AkatsukiSite.prototype.loadMaxSectionNo = function (post_process) {
+		this.loadIndex (function (maxSectionNo) {
+			if (maxSectionNo !== false) {
+				setIndexPageReady();
+			}
+			post_process (maxSectionNo);
+		});
+	}
+
+	AkatsukiSite.prototype.fetchIndexPage = function () {
+		if (false) {
+			// まず1ページだけ取ってみる
+			var url = this.getNovelBaseURL();
+			console.debug("Akatsuki: load base page", url);
+			var buildIndexMap = function (htmlDocList) {
+				htmlDocList.forEach(function () {
+				});
+			}
+			$.get(url).done(function(data) {
+				// /html/body/div/div[2]/div/div/div[2]/div/div/div[2]
+				// #contents-inner2 div.box div.box div.body-x1 div.paging-top
+				// "#contents-inner2"はbody直下ではないので問題ないはず
+				var paging_top = $('#contents-inner2 div.paging-top', data);
+				if (paging_top.size()) {
+					console.debug("multiple index pages");
+					// pagingのnextのpの中にtotal等がある
+					var info = paging_top.next('p');
+					if (!info.size()) {
+						console.debug("multiple index get info failed");
+						return;
+					}
+					//現1ページ／全220ページ、20件／全4384件、1～20件を表示
+				} else {
+					buildIndexMap([data]);
+				}
+			})
+			.fail(function() {
+				console.debug("fetch first index failed");
+				// どうしよう？
+			});
+			//always, then, $.when(a,b,...)
+		}
+	}
+
+
+	// 自動loadIndexさせないとid:secnoのmapが作れない
+	AkatsukiSite.prototype.startAsyncProcess = function () {
+		//
+	}
 	/////////////////////////////////////////////////////////////
 	// カラー指定の扱いとtoken関連は調整がいる
 	HamelnSite.prototype.parseHtmlCommon = function (contents, section) {
@@ -1663,7 +2001,7 @@ $(document).ready(function(){
 		//console.debug("_atogaki", section_data._atogaki);
 		section_data.atogaki = splitPageEx(section_data._atogaki, line_num, char_num, 2);
 		//
-		console.debug(section_data);
+		//console.debug(section_data);
 		return section_data;
 	}
 
@@ -1710,6 +2048,9 @@ $(document).ready(function(){
 	};
 
 	// カラー指定の扱いとtoken関連は調整がいる
+	// 初期段階ではURLしかみていないため、
+	// トップページが短編本文ページなのか目次ページなのか
+	// 区別できない仕様なので、中身がないこともありうる
 	HamelnSite.prototype.parseInitialPage = function () {
 		var contents = $('#maind > div.ss:eq(0)');
 		// minimum check
@@ -1717,10 +2058,7 @@ $(document).ready(function(){
 			console.debug("min check failed");
 			return false;
 		}
-
-		currentSection = 1;
-		setIndexPageDisabled ();
-		generalAllNo = 1;
+		// ログイン関連はとりあえず無効
 		login = false;
 		token = null;
 		ncode2 = null;
@@ -1734,14 +2072,73 @@ $(document).ready(function(){
 		return true;
 	}
 
+	// siteParser内で持つ情報は更新しても
+	// globalな情報は呼出し元で更新させる
+	//  autherは目次から取れるかどうかサイト固有の話でもあるし
+	//  本来のindex関連の処理とは筋違いなのでsiteParser内で完結させる
+	HamelnSite.prototype.loadIndex = function (postprocess) {
+		console.debug("load index:", this.getNovelIndexURL()),
+		$.get(this.getNovelIndexURL())
+		.then(
+			// .done
+			function(data) {
+				var index = $('#maind > div.ss:lt(3)', data);
+				$('#noja_index > div').html(index);
+				//var a_series = $('#noja_index div.series > a');
+				//if (a_series.size()) {
+				//	a_series.attr('href', this.site + a_series.attr('href').slice(1));
+				//}
+				// レイアウト等の調整は放置
+				// htmlやcssでいじるほうがいいのかどうか…
+				var total_sec_no = 0;
+				$('#noja_index > div > div.ss:eq(2) a').each(function() {
+					var no = $(this).attr('href').match(/([0-9]+)\.html$/)[1];
+					$(this).attr('href', null)
+						.css('cursor', 'pointer');
+					var sec_no = ++total_sec_no;
+					//console.debug("no, sec_no:", no, sec_no);
+					$(this).bind('click', function(){
+						jumpTo (sec_no, 0);
+						$('#noja_index').hide(100);
+					});
+				});
+				//auther = $('#noja_index .novel_writername')
+				//	.contents()
+				//	.not('a[href^="'+this.getShioriPrefixURL()+'"]')
+				//	.text().slice(3);
+				postprocess (total_sec_no);
+			},
+			// .fail
+			function() {
+				console.debug("load index: failed"),
+				postprocess (false);
+			}
+		);
+	}
 
+	// 非同期にmaxだけもらうことはできないのでloadIndexする
+	// callbackの仕様が同一なのでそのままrelayするだけ?
+	// と思ったが折角loadIndexするのでready設定はすべき
+	// 小説情報ページ等から取ってくる手もあるが、
+	// どうせhtmldocを1ページ取得するならindexのほうがいい
+	HamelnSite.prototype.loadMaxSectionNo = function (post_process) {
+		this.loadIndex (function (maxSectionNo) {
+			if (maxSectionNo !== false) {
+				setIndexPageReady();
+			}
+			post_process (maxSectionNo);
+		});
+	}
 
+	HamelnSite.prototype.startAsyncProcess = function () {
+		// 自動loadIndexさせてもいいのだがどうしよう？
+	}
 
 	////////////////////////////////////////////////////////
 	//各話の各ページにジャンプする関数。toPageに負の値を渡すと最後尾ページにジャンプ。
 
 	jumpTo = function(section, toPage) {
-		var shouHyouka = function() {
+		var show_hyouka_form = function() {
 			showStatusMessage('川・◊・)いま投稿されているのはここまでなのじゃー。感想を書いてあげるといいのじゃー。');
 			if (siteParser.enableReputationForm) {
 				$('#noja_hyouka').show();
@@ -1753,7 +2150,8 @@ $(document).ready(function(){
 		}
 		//ジャンプ先が全話数より多ければ終了
 		if (generalAllNo && section > generalAllNo) {
-			shouHyouka();
+			//console.debug("generalAllNo, section", generalAllNo, section);
+			show_hyouka_form();
 			return;
 		}
 		//isChangeSection===trueなら話移動が必要
@@ -1777,7 +2175,7 @@ $(document).ready(function(){
 				showStatusMessageLoading ();
 				//ajaxでページを読み込む。
 				$.ajax({
-					url: getNovelSectionURL (section),
+					url: siteParser.getNovelSectionURL (section),
 					//成功
 					success: function (data) {
 						//データを登録
@@ -1812,37 +2210,38 @@ $(document).ready(function(){
 				// 要求した場合は確実に存在するのでロードすればよい
 				load_section_main();
 			} else if (generalAllNo === null) {
+				console.debug('load max section no');
 				//話数カウントされていない場合
 				//読み込み中をマーク
 				generalAllNo = false;
 				showStatusMessageLoading ();
-				//ajaxでなろう小説APIからデータを受け取る
-				$.ajax({
-					url: api + ajax_get_opt + ncode,
-					dataType: ajax_data_type,
-					//成功
-					success: function (data) {
-						var flag = (generalAllNo === false);
-						//話数を設定
-						generalAllNo = parseInt (data[1].general_all_no);
-						maxSection = generalAllNo;
-						//話数が多ければさらに読み込み
-						if (section <= generalAllNo) {
-							// 存在が確認できたのでsection本体のロードを開始
-							load_section_main();
-						} else {
-							shouHyouka();
-							sections[section] = false;
-						}
-					},
-					error: function(data) {
+				/// max取得成功した場合は引き続いてメインを呼ぶので
+				// loadingはまだonにしたまま
+				// 失敗したときだけoffにする
+				siteParser.loadMaxSectionNo(function (maxSectionNo) {
+					if (maxSectionNo === false) {
+						// 失敗
 						showStatusMessage('失敗(´・ω・｀)……')
 						sections[section] = false;
 						--loading;
 						generalAllNo = null;
+					} else {
+						//話数を設定
+						generalAllNo = maxSectionNo;
+						maxSection = generalAllNo;
+						if (section <= generalAllNo) {
+							// 存在が確認できたのでsection本体のロードを開始
+							load_section_main();
+						} else {
+							show_hyouka_form();
+							sections[section] = false;
+						}
 					}
 				});
 			} else if (generalAllNo === false) {
+				/// max取得成功した場合は引き続いてメインを呼ぶので
+				// loadingはまだonにしたまま
+				// 本当はこれもsiteParser側に移動したいところ
 				// 読み込み中でまだ完了してないなら
 				var wait_for_section_info = function() {
 					if (generalAllNo === false) {
@@ -1893,7 +2292,7 @@ $(document).ready(function(){
 		// これって話数移動したら最大ページ数も変化するので
 		// selectorでの指定崎がない場合もあるのだがいいのかな？
 		page = toPage;
-		$('#noja_page_'+page).addClass('noja_page_select')
+		$('#noja_page_' + page).addClass('noja_page_select')
 			.css('border-color', '');
 		//
 		if (isChangeSection) {
@@ -2674,192 +3073,245 @@ $(document).ready(function(){
 		});
 	}
 	/////////////////////
-	nojaImport = function(text, callback){
-		if(loading) {
+	nojaImport = function (htmldoc, callback) {
+		if (loading) {
 			showStatusMessage('川・◊・)ねっとわーく接続中なのじゃー。読み込みするのは後にするのじゃー。');
 			return;
 		}
-		var _sections = [];
-		var _infos = {};
-		var _kaigyou = setting.kaigyou;
+		var imported_sections = [];
+		var imported_infos = {};
+		var _kaigyou = setting.kaigyou;	// これは使ってない？
 		try {
-			var pos = text.indexOf(download_id);
-			if(pos<0) {
+			var pos = htmldoc.indexOf(download_id);
+			if (pos < 0) {
 				showStatusMessage('(´・ω・｀)このhtmlはのじゃー用ファイルじゃないよ');
 				callback(false);
 			}
-			pos+=download_id.length;
-			var json = $.parseJSON(text.substr(pos).match(/{[^}]*}/)[0]);
-			if(!valid( (_infos.site = json.site[0]) )) throw 0;
-			if(!valid( (_infos.site2 = json.site[1]) )) throw 0;
-			if(!valid( (_infos.ncode = json.ncode[0]) )) throw 0;
-			if(!valid( (_infos.ncode2 = json.ncode[1]) )) throw 0;
-			_infos.auther = json.auther;
-			_infos.generalAllNo = json.general_all_no;
-			if (!valid(json.tanpen)) throw 0;
-			_infos.indexPageStatus = (json.tanpen)
-				? INDEXPAGE_DISABLE : INDEXPAGE_NOTREADY;
-			var content = $(text);
-			_infos.title = content.filter('title').text();
-			var main = $('#noja_download_file_main', content);
-			_infos.color = main.css('color');
-			_infos.bgColor = main.css('background-color');
-			_infos.bgImage = main.css('background-image');
-			if(_infos.bgImage===null||_infos.bgImage==='none'||_infos.bgImage==='') _infos.bgImage = null;
-			else {
-				_infos.bgImage = _infos.bgImage.match(/url\(([^\)]*)\)/)[1];
-				_infos.bgImage = $('<img>').attr('src', _infos.bgImage).bind('load', function(){showPage();}).get(0);
-				_infos.bgColor = '#FFFFFF';
+			pos += download_id.length;
+			var json = $.parseJSON(htmldoc.substr(pos)
+				.match(/{[^}]*}/)[0]);
+			if (!valid( (imported_infos.site   = json.site[0])  )) throw 0;
+			if (!valid( (imported_infos.site2  = json.site[1])  )) throw 0;
+			if (!valid( (imported_infos.ncode  = json.ncode[0]) )) throw 0;
+			if (!valid( (imported_infos.ncode2 = json.ncode[1]) )) throw 0;
+
+			imported_infos.auther = json.auther;
+			imported_infos.generalAllNo = json.general_all_no;
+			if (!valid(json.tanpen)) {
+				throw 0;
 			}
-			_infos.currentSection = 0x7FFFFFFF;
-			var fn = function(data) {
+			imported_infos.indexPageStatus
+				= (json.tanpen) ? INDEXPAGE_DISABLE : INDEXPAGE_NOTREADY;
+
+			// comment部のjson以外のhtmlとして取り出すcontent
+			var content = $($.parseHTML(htmldoc));
+			imported_infos.title = content.filter('title').text();
+			var main = $('#noja_download_file_main', content);
+			imported_infos.color = main.css('color');
+			imported_infos.bgColor = main.css('background-color');
+			imported_infos.bgImage = main.css('background-image');
+			if (imported_infos.bgImage === null
+				|| imported_infos.bgImage === 'none'
+				|| imported_infos.bgImage === '') {
+				imported_infos.bgImage = null;
+			} else {
+				imported_infos.bgImage = imported_infos.bgImage
+					.match(/url\(([^\)]*)\)/)[1];
+				imported_infos.bgImage = $('<img>')
+					.attr('src', imported_infos.bgImage)
+					.bind('load', function() {showPage();})
+					.get(0);
+				imported_infos.bgColor = '#FFFFFF';
+			}
+			imported_infos.currentSection = 0x7fffffff;
+			// ncodeに対応する設定をloadした後の処理
+			var import_postprocess = function(data) {
 				setting = data;
-				if(!valid( setting )) {
-					setting = { ncode:_infos.ncode, kaigyou:false, fMaegaki:true, fAtogaki:true };
+				// 設定がなかったらデフォルトで作って新規保存
+				if (!valid( setting )) {
+					setting = {
+						ncode: imported_infos.ncode,
+						kaigyou: false,
+						fMaegaki: true,
+						fAtogaki:true
+					};
 					save('ncode', setting);
 				}
-				setting.autoSave = setting.autoSave===true;
-				setting.autoRestore = setting.autoRestore===true;
-				setting.oldData = setting.oldData===true;
-				main.children('div').each(function(){
-					var i = parseInt($(this).attr('id').
-						substr('noja_download_section_'.length));
-					loadSection = i;
-					_infos.currentSection = Math.min(_infos.currentSection, i);
-					var sec_data = {};
-					sec_data.chapter_title = $('.noja_download_chapter_title', this);
-					sec_data.chapter_title = (sec_data.chapter_title.size())
-						? sec_data.chapter_title.text() : '';
+				// currentの設定を更新
+				setting.autoSave    = (setting.autoSave === true);
+				setting.autoRestore = (setting.autoRestore === true);
+				setting.oldData     = (setting.oldData === true);
+				main.children('div').each(function () {
+					var sec_no = parseInt($(this).attr('id')
+						.substr('noja_download_section_'.length));
+					imported_infos.currentSection
+						= Math.min(imported_infos.currentSection, sec_no);
+					loadSection = sec_no;
+					var sec = {};
+					sec.chapter_title = getText('.noja_download_chapter_title', this);
 					//
-					sec_data.subtitle = $('.noja_download_subtitle', this).text();
+					sec.subtitle = getText('.noja_download_subtitle', this);
 					//
-					sec_data._maegaki = $('.noja_download_maegaki', this);
-					sec_data._maegaki = (sec_data._maegaki.size()) ? sec_data._maegaki.html() : null;
-					sec_data.maegaki = splitPageEx(sec_data._maegaki, line_num, char_num);
+					sec._maegaki = getHtml('.noja_download_maegaki', this);
+					sec.maegaki = splitPageEx(sec._maegaki, line_num, char_num);
 					//
-					sec_data._atogaki = $('.noja_download_atogaki', this);
-					sec_data._atogaki = (sec_data._atogaki.size()) ? sec_data._atogaki.html() : null;
-					sec_data.atogaki = splitPageEx(sec_data._atogaki, line_num, char_num);
+					sec._atogaki = getHtml('.noja_download_atogaki', this);
+					sec.atogaki = splitPageEx(sec._atogaki, line_num, char_num);
 					//
-					sec_data._honbun = $('.noja_download_honbun', this).html();
-					sec_data.honbun = splitPage(sec_data._honbun, line_num, char_num);
+					sec._honbun = getHtml('.noja_download_honbun', this);
+					sec.honbun = splitPage(sec._honbun, line_num, char_num);
 					//
-					_sections[i] = sec_data;
+					imported_sections[sec_no] = sec;
 				});
-				if(_infos.ncode!==ncode) {
-					sections = _sections;
+				if (imported_infos.ncode !== ncode) {
+					// importしたものが別のコンテンツなら
+					sections = imported_sections;
 					$('#noja').empty().append(main);
-					generalAllNo = _infos.generalAllNo;
-					currentSection = _infos.currentSection;
-					page=0;
-				}
-				else {
+					generalAllNo = imported_infos.generalAllNo;
+					currentSection = imported_infos.currentSection;
+					page = 0;
+				} else {
+					// 同一ncodeなら部分的な更新
 					var prev = null;
-					for(var i = 1; i < _sections.length; ++i) {
-						if(i in _sections) {
-							if(!(i in sections)) {
-								if(prev==null) $('#noja_download_file_main').prepend('<div id="noja_download_section_'+i+'">');
-								else prev = prev.after('<div id="noja_download_section_'+i+'">');
+					for (var sec_no = 1; sec_no < imported_sections.length; ++sec_no) {
+						var sec_id = 'noja_download_section_' + sec_no;
+						if (sec_no in imported_sections) {
+							var sec = imported_sections[sec_no];
+							if (!(sec_no in sections)) {
+								// 新規なのでdivを作る
+								if (prev == null) {
+									$('#noja_download_file_main')
+										.prepend('<div id="' + sec_id + '">');
+								} else {
+									prev = prev.after('<div id="' + sec_id + '">');
+								}
 							}
-							prev = $('#noja_download_section_'+i);
+							prev = $('#' + sec_id);
 							prev.empty();
-							if (_sections[i]._maegaki !== null) {
-								prev.append('<div class="noja_download_maegaki">'+_sections[i]._maegaki+'</div>');
+							if (sec._maegaki !== null) {
+								prev.append('<div class="noja_download_maegaki">'
+									+ sec._maegaki + '</div>');
 							}
-							if (_sections[i].chapter_title !== '') {
-								prev.append('<div class="noja_download_chapter_title">'+_sections[i].chapter_title+'</div>');
+							if (sec.chapter_title !== '') {
+								prev.append('<div class="noja_download_chapter_title">'
+									+ sec.chapter_title + '</div>');
 							}
-							prev.append('<div class="noja_download_subtitle">'+_sections[i].subtitle+'</div>')
-							prev.append('<div class="noja_download_honbun">'+_sections[i]._honbun+'</div>');
-							if (_sections[i]._atogaki!==null) {
-								prev.append('<div class="noja_download_atogaki">'+_sections[i]._atogaki+'</div>');
+							prev.append('<div class="noja_download_subtitle">'
+								+ sec.subtitle + '</div>')
+							prev.append('<div class="noja_download_honbun">'
+								+ sec._honbun + '</div>');
+							if (sec._atogaki !== null) {
+								prev.append('<div class="noja_download_atogaki">'
+									+ sec._atogaki + '</div>');
 							}
-							sections[i] = _sections[i];
-						} else if(i in sections) {
-							prev = $('#noja_download_section_'+i);
+							sections[sec_no] = sec;
+						} else if (sec_no in sections) {
+							// 既存でimport側にはない番号の場合はprev更新だけ
+							prev = $('#' + sec_id);
 						}
 					}
 					$('#noja_download_file_main').css({
-						color: _infos.color,
-						backgroundColor:_infos.bgColor
+						color: imported_infos.color,
+						backgroundColor: imported_infos.bgColor
 					});
-					if(_infos.bgImage) $('#noja_download_file_main').css('background-image', 'url('+_infos.bgImage+')');
-					if (_infos.generalAllNo && generalAllNo) {
-						generalAllNo = Math.max(generalAllNo, _infos.generalAllNo);
+					if (imported_infos.bgImage) {
+						$('#noja_download_file_main')
+							.css('background-image', 'url('+imported_infos.bgImage+')');
+					}
+					if (imported_infos.generalAllNo && generalAllNo) {
+						generalAllNo = Math.max(generalAllNo, imported_infos.generalAllNo);
 					}
 				}
-				site = _infos.site;
-				site2 = _infos.site2;
-				ncode = _infos.ncode;
-				ncode2 = _infos.ncode2;
-				setIndexPageStatus (_infos.indexPageStatus);
-				auther = _infos.auther;
-				title = _infos.title;
+				siteParser.site   = imported_infos.site;
+				siteParser.site2  = imported_infos.site2;
+				ncode  = imported_infos.ncode;
+				ncode2 = imported_infos.ncode2;
+				setIndexPageStatus (imported_infos.indexPageStatus);
+				auther = imported_infos.auther;
+				title  = imported_infos.title;
 				$('title').text(title);
-				color = _infos.color;
-				bgColor = _infos.bgColor;
-				bgImage = _infos.bgImage;
+				color   = imported_infos.color;
+				bgColor = imported_infos.bgColor;
+				bgImage = imported_infos.bgImage;
+				//
 				chapter_title = sections[currentSection].chapter_title;
 				subtitle = sections[currentSection].subtitle;
-				maegaki = sections[currentSection].maegaki;
-				honbun = sections[currentSection].honbun;
-				atogaki = sections[currentSection].atogaki;
+				maegaki  = sections[currentSection].maegaki;
+				honbun   = sections[currentSection].honbun;
+				atogaki  = sections[currentSection].atogaki;
 				if (generalAllNo) {
 					maxSection = generalAllNo;
 				} else {
 					generalAllNo = null;
 					maxSection = sections.length;
 				}
-				if(site.indexOf('http://ncode.syosetu.com/')==0) {
+				// このあたりはサイト固有のsetup
+				if (siteParser.site.indexOf('http://ncode.syosetu.com/')==0) {
 					$('#noja_impression_usertype').empty();
 					$('#noja_novelreview_usertype').empty();
-					api = 'http://api.syosetu.com/novelapi/api/';
-				}
-				else if(site.indexOf('http://novel18.syosetu.com/')==0) {
-					$('#noja_impression_usertype').html('<select name="usertype"><option value="xuser">Xアカウントで書き込み</option><option value="">通常アカウントで書き込み</option></select>');
-					$('#noja_novelreview_usertype').html('<select name="usertype"><option value="xuser">Xアカウントで書き込み</option><option value="">通常アカウントで書き込み</option></select>');
-					api = 'http://api.syosetu.com/novel18api/api/';
-				}
-				else {
+					siteParser.api = 'http://api.syosetu.com/novelapi/api/';
+				} else if (siteParser.site.indexOf('http://novel18.syosetu.com/')==0) {
+					$('#noja_impression_usertype')
+						.html('<select name="usertype"><option value="xuser">Xアカウントで書き込み</option><option value="">通常アカウントで書き込み</option></select>');
+					$('#noja_novelreview_usertype')
+						.html('<select name="usertype"><option value="xuser">Xアカウントで書き込み</option><option value="">通常アカウントで書き込み</option></select>');
+					siteParser.api = 'http://api.syosetu.com/novel18api/api/';
+				} else {
 					$('#noja_impression_usertype').empty();
 					$('#noja_novelreview_usertype').empty();
-					api='';
+					siteParser.api = '';
 				}
-				$('#noja_maegaki').prop('checked', setting.fMaegaki); 
-				$('#noja_atogaki').prop('checked', setting.fAtogaki); 
-				$('#noja_kaigyou').prop('checked', setting.kaigyou); 
+				$('#noja_maegaki').prop('checked', setting.fMaegaki);
+				$('#noja_atogaki').prop('checked', setting.fAtogaki);
+				$('#noja_kaigyou').prop('checked', setting.kaigyou);
 				$('#noja_autosave').prop('checked', setting.autoSave);
 				$('#noja_autorestore').prop('checked', setting.autoRestore);
 				$('#noja_olddata').prop('checked', setting.oldData);
-				$('#noja').css({color:color, backgroundColor:bgColor, backgroundImage:bgImage?'url('+bgImage.src+')':'none' });
-				$('#noja_download_file_main').css({color:'', backgroundColor:'', backgroundImage:''});
-				$('#noja_hyouka .novel_hyouka form').attr('action', getNovelPointRegisterURL());
-				$('#noja_hyouka #noja_f_cr form').attr('action', getImpressionConfirmURL());
-				$('#noja_impression_list').attr('href', getImpressionListURL());
-				$('#noja_novelreview_list').attr('href', getNovelReviewListURL());
-				callback(true);
+				$('#noja').css({
+					color: color,
+					backgroundColor: bgColor,
+					backgroundImage: bgImage?'url('+bgImage.src+')':'none'
+				});
+				$('#noja_download_file_main').css({
+					color: '',
+					backgroundColor: '',
+					backgroundImage:''
+				});
+				$('#noja_hyouka .novel_hyouka form')
+					.attr('action', getNovelPointRegisterURL());
+				$('#noja_hyouka #noja_f_cr form')
+					.attr('action', getImpressionConfirmURL());
+				$('#noja_impression_list')
+					.attr('href', getImpressionListURL());
+				$('#noja_novelreview_list')
+					.attr('href', getNovelReviewListURL());
+				////
+				callback (true);
 			}
-			load('ncode', _infos.ncode, fn);
-		}
-		catch(e) {
+			load ('ncode', imported_infos.ncode, import_postprocess);
+		} catch (e) {
 			showStatusMessage('(´・ω・｀)読み込みエラーが発生したよ。');
 			callback(false);
 		}
 	}
 	/////////////////////
-	nojaSave = function(showmessage){
-		showmessage = (showmessage === undefined) ? true : showmessage;
-		if(loading) {
+	nojaSave = function (isShowMessage) {
+		isShowMessage = (isShowMessage === undefined) ? true : isShowMessage;
+		if (loading) {
 			showStatusMessage('川・◊・)ねっとわーく接続中なのじゃー。せーぶするのは後にするのじゃー。');
 			return;
 		}
-		var fn = function() { if(showmessage) showStatusMessage('(｀・ω・´)保存したよ！'); };
-		var flag = false;
+		var save_postprocess = function() {
+			if (isShowMessage) {
+				showStatusMessage('(｀・ω・´)保存したよ！');
+			}
+		};
+		var another_callback_was_done = false;
 		load('saveData', ncode, function(data) {
-			if(!valid(data)) {
+			if (!valid(data)) {
 				data = {
-					site: site,
-					site2: site2,
+					site: siteParser.site,
+					site2: siteParser.site2,
 					ncode: ncode,
 					ncode2: ncode2,
 					generalAllNo: generalAllNo,
@@ -2871,12 +3323,12 @@ $(document).ready(function(){
 					.append($(' #noja_index .novel_title, #noja_index .novel_writername, #noja_index #novel_ex, #noja_index .index_box').clone()).html();
 			}
 			data.tanpen = isIndexPageDisable();
-			data.generalAllNo = Math.max(generalAllNo, data.generalAllNo);
-			data.title=title;
-			data.color=color;
-			data.bgColor=bgColor;
+			data.generalAllNo = Math.max (generalAllNo, data.generalAllNo);
+			data.title = title;
+			data.color = color;
+			data.bgColor = bgColor;
 			data.auther = auther;
-			data.bgImage=bgImage?$(bgImage).attr('src'):null;
+			data.bgImage = bgImage ? $(bgImage).attr('src') : null;
 			for(var i = 1; i < sections.length; ++i) {
 				var sec = sections[i];
 				if (sec == null || (setting.oldData && i in data.sections)) {
@@ -2891,96 +3343,116 @@ $(document).ready(function(){
 				};
 			}
 			save('saveData', data);
-			if(flag) fn();
-			flag = true;
+			if (another_callback_was_done) {
+				save_postprocess();
+			}
+			another_callback_was_done = true;
 		});
 		load('global', 'bookList', function(data) {
-			if(!valid(data)) data = {};
-			data[ncode] = {title:title, auther:auther, savetime:parseInt((new Date)/1000)}
-			save('global', data, 'bookList');
-			if(flag) fn();
-			flag = true;
+			if (!valid(data)) {
+				data = {};
+			}
+			data[ncode] = {
+				title: title,
+				auther: auther,
+				savetime: parseInt((new Date)/1000),
+			};
+			save ('global', data, 'bookList');
+			if (another_callback_was_done) {
+				save_postprocess();
+			}
+			another_callback_was_done = true;
 		})
 	};
 	/////////////////////
-	nojaRestore = function(_ncode, showmessage, callback) {
-		showmessage = (showmessage === undefined) ? true : showmessage;
-		if(loading) {
-			showStatusMessage('川・◊・)ねっとわーく接続中なのじゃー。ろーどするのは後にするのじゃー。');
+	nojaRestore = function (new_ncode, isShowMessage, callback) {
+		isShowMessage = (isShowMessage === undefined) ? true : isShowMessage;
+		if (loading) {
+			showStatusMessage ('川・◊・)ねっとわーく接続中なのじゃー。ろーどするのは後にするのじゃー。');
 			return;
 		}
-		var _setting = setting;
-		var fn = function(data) {
-			if(!valid(data)) {
-				if(showmessage) showStatusMessage('(´・ω・｀)保存されたデータがないよ');
-				callback(false);
+		var new_setting = setting;
+		var restore_postprocess = function(data) {
+			if (!valid(data)) {
+				if (isShowMessage) {
+					showStatusMessage('(´・ω・｀)保存されたデータがないよ');
+				}
+				callback (false);
 				return;
 			}
-			setting = _setting;
+			setting = new_setting;
 			$('#noja_fMaegaki').prop('checked', setting.fMaegaki);
 			$('#noja_fAtogaki').prop('checked', setting.fAtogaki);
 			$('#noja_kaigyou').prop('checked', setting.kaigyou);
 			$('#noja_autosave').prop('checked', setting.autoSave);
 			$('#noja_autorestore').prop('checked', setting.autoRestore);
 			$('#noja_olddata').prop('checked', setting.oldData);
-			if(ncode != _ncode) $('#noja_download_file_main').empty();
-			for(var i = 1; i < data.sections.length; ++i) {
+
+			// download_file等のrestore
+			if (ncode != new_ncode) {
+				$('#noja_download_file_main').empty();
+			}
+			for (var i = 1; i < data.sections.length; ++i) {
 				var sec = data.sections[i];
-				if(!(i in sections)&&sec!=null) {
+				if (!(i in sections) && sec != null) {
 					sections[i] = sec;
-					if(sec===null) continue;
+					if (sec === null) {
+						continue;
+					}
 					loadSection = i;	// parseする前に設定が必要
-					sec.maegaki = null;
-					sec.atogaki = null;
-					if ('_maegaki' in sec) {
-						sec.maegaki = splitPageEx(sec._maegaki, line_num, char_num);
-					}
-					if ('_atogaki' in sec) {
-						sec.atogaki = splitPageEx(sec._atogaki, line_num, char_num);
-					}
-					sec.honbun = splitPage(sec._honbun, line_num, char_num);
-					autoPagerize(sec, i);
+					sec.maegaki = ('_maegaki' in sec)
+						? splitPageEx (sec._maegaki, line_num, char_num)
+						: null
+						;
+					sec.atogaki = ('_atogaki' in sec)
+						? splitPageEx (sec._atogaki, line_num, char_num)
+						: null
+						;
+					sec.honbun = splitPage (sec._honbun, line_num, char_num);
+					autoPagerize (sec, i);
 				}
 			}
 			if (data.tanpen) {
 				setIndexPageDisabled ();
-			} else if (data.index && (!isIndexPageReady() || ncode != _ncode)) {
+			} else if (data.index
+				&& (!isIndexPageReady() || ncode != new_ncode)) {
+				// 連載でindex pageがある場合
 				setIndexPageReady();
 				$('#noja_index > div').html(data.index);
+				// @@ この部分は統合する
 				var i = 0;
-				$('#noja_index > div > .index_box a').each(function(){
+				$('#noja_index > div > .index_box a').each(function() {
 					var ii = ++i;
-					$(this).bind('click', function(){
+					$(this).bind('click', function() {
 						jumpTo(ii, 0);
 						$('#noja_index').hide(100);
 					});
 				});
 			}
 			ncode2 = data.ncode2;
-			site = data.site;
-			site2 = data.site2;
-			if(ncode!=_ncode) {
-				if(!data.index) {
+			siteParser.site = data.site;
+			siteParser.site2 = data.site2;
+			if (ncode != new_ncode) {
+				if (!data.index) {
 					setIndexPageDisabled ();
 					$('#noja_index > div').empty();
 				}
 				title = data.title;
 				$('title').text(title);
-				if(site.indexOf('http://ncode')>=0) {
+				if (siteParser.site.indexOf('http://ncode') >= 0) {
 					$('#noja_impression_usertype').empty();
 					$('#noja_novelreview_usertype').empty();
-					api = 'http://api.syosetu.com/novelapi/api/';
-				} else if(site.indexOf('http://novel18')>=0) {
+					siteParser.api = 'http://api.syosetu.com/novelapi/api/';
+				} else if (siteParser.site.indexOf('http://novel18') >= 0) {
 					$('#noja_impression_usertype')
 						.html('<select name="usertype"><option value="xuser">Xアカウントで書き込み</option><option value="">通常アカウントで書き込み</option></select>');
 					$('#noja_novelreview_usertype')
 						.html('<select name="usertype"><option value="xuser">Xアカウントで書き込み</option><option value="">通常アカウントで書き込み</option></select>');
-					api = 'http://api.syosetu.com/novel18api/api/';
-				}
-				else {
+					siteParser.api = 'http://api.syosetu.com/novel18api/api/';
+				} else {
 					$('#noja_impression_usertype').empty();
 					$('#noja_novelreview_usertype').empty();
-					api='';
+					siteParser.api = '';
 				}
 				if (data.generalAllNo) {
 					maxSection = generalAllNo = data.generalAllNo;
@@ -2989,18 +3461,21 @@ $(document).ready(function(){
 					maxSection = sections.length;
 				}
 				ncode = data.ncode;
-				var i;
-				for(i = 1; i < sections.length && sections[i]===null; ++i) {
+				var first_avail_section;
+				for(first_avail_section = 1;
+					first_avail_section < sections.length
+					&& sections[first_avail_section] === null;
+					++first_avail_section) {
 					;
 				}
 				color = data.color;
 				bgColor = data.bgColor;
 				bgImage = data.bgImage;
 				$('#noja').css({color:color, backgroundColor:bgColor});
-				if(bgImage&&bgImage!=='none') {
-					$('#noja').css('background-image', 'url('+bgImage+')');
+				if (bgImage && bgImage !== 'none') {
+					$('#noja').css('background-image', 'url(' + bgImage + ')');
 					bgImage = $('<img>').attr('src', bgImage)
-						.bind('load', function(){showPage(); }).get(0);
+						.bind('load', function() { showPage(); }).get(0);
 				} else {
 					$('#noja').css('background-image', 'none');
 				}
@@ -3011,83 +3486,123 @@ $(document).ready(function(){
 					.attr('action', getImpressionConfirmURL());
 				$('#noja_hyouka #noja_r_fc form')
 					.attr('action', getNovelReviewConfirmURL());
-				if(i===currentSection) jumpTo(-1, 0);
-				else jumpTo(i, 0);
-			}
-			else {
+				if (first_avail_section === currentSection) {
+					jumpTo (-1, 0);
+				} else {
+					jumpTo (first_avail_section, 0);
+				}
+			} else {
+				// ncodeが変わらなかった場合
 				maxSection = generalAllNo =  Math.max(generalAllNo, data.generalAllNo);
-				showPage();
+				showPage ();
 			}
-			if(showmessage) showStatusMessage('(｀・ω・´)読み込んだよ！');
-			if(callback) callback(true);
+			if (isShowMessage) {
+				showStatusMessage('(｀・ω・´)読み込んだよ！');
+			}
+			if (callback) {
+				callback(true);
+			}
 		};
-		if(ncode!=_ncode) {
+		if (ncode != new_ncode) {
 			sections = [];
-			load('ncode', _ncode, function(data) {
-				if(valid(data)) _setting = data;
-				else _setting = {ncode:_ncode, fMaegaki:true, fAtogaki:true, kaigyou:false}
-				_setting.autoSave = _setting.autoSave === true;
-				_setting.autoRestore = _setting.autoRestore === true;
-				_setting.oldData = _setting.oldData === true;
-				load('saveData', _ncode, fn);
+			load('ncode', new_ncode, function(data) {
+				if (valid(data)) {
+					new_setting = data;
+				} else {
+					new_setting = {
+						ncode: new_ncode,
+						fMaegaki: true,
+						fAtogaki:true,
+						kaigyou:false,
+					};
+				}
+				new_setting.autoSave    = new_setting.autoSave === true;
+				new_setting.autoRestore = new_setting.autoRestore === true;
+				new_setting.oldData     = new_setting.oldData === true;
+				load('saveData', new_ncode, restore_postprocess);
 			});
+		} else {
+			load('saveData', new_ncode, restore_postprocess);
 		}
-		else load('saveData', _ncode, fn);
 	};
 	/////////////////////
 	nojaDelete = function(_ncode) {
-		deleteItem('saveData', _ncode);
-		load('global', 'bookList', function(data) {
-			if(!valid(data)) return;
+		deleteItem ('saveData', _ncode);
+		load ('global', 'bookList', function(data) {
+			if (!valid(data)) {
+				return;
+			}
 			delete data[_ncode];
-			save('global', data, 'bookList');
+			save ('global', data, 'bookList');
 		});
 	};
 	/////////////////////
 	// @@ TODO @@ template化
-	createSaveData = function(min, max) {
-		var buffer='<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml">\n<!--\n'+download_id+'\n{\n'+
-		'"version":"'+version+'",\n'+
-		'"site":["'+site+'","'+site2+'"],\n'+
-		'"ncode":["'+ncode+'","'+ncode2+'"],\n';
+	// site固有情報とgenericな情報をどう分けるか？
+	createSaveData = function (min, max) {
+		var buffer = '<?xml version="1.0" encoding="utf-8"?>\n'
+			+ '<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml">\n'
+			+ '<!--\n'
+			+ download_id + '\n'
+			+ '{\n'
+			+ '"version":"' + version + '",\n'
+			+ '"site":["' + siteParser.site + '","' + siteParser.site2 + '"],\n'
+			+ '"ncode":["' + ncode + '","' + ncode2 + '"],\n'
+			;
 		if (generalAllNo) {
-			buffer+='"general_all_no":'+generalAllNo+',\n';
+			buffer += '"general_all_no":' + generalAllNo + ',\n';
 		}
-		'"auther":'+auther+',\n';
-		buffer+='"tanpen":'+(isIndexPageDisable())+'\n'+'}\n-->\n<head>\n<title>'
-			+$('<div>').text(title).html()
-			+'</title>\n<meta charset="utf-8" />\n</head>\n<body>\n<div>\n<div id="noja_download_file_main" style="color:'
-			+color+';background-color:'+bgColor+';';
+		buffer += '"auther":' + auther + ',\n';
+		buffer += '"tanpen":' + (isIndexPageDisable()) + '\n'
+			+ '}\n'
+			+ '-->\n'
+			+ '<head>\n'
+			+ '<title>'
+			+ $('<div>').text(title).html()
+			+ '</title>\n'
+			+ '<meta charset="utf-8" />\n'
+			+ '</head>\n'
+			+ '<body>\n'
+			+ '<div>\n'
+			+ '<div id="noja_download_file_main" style="color:'
+			+ color + ';background-color:' + bgColor + ';'
+			;
 		if (bgImage) {
 			buffer+='background-image:url('+bgImage.src+');';
 		}
 		buffer+='">\n';
-		for(var i = min; i <= max; ++i) {
-			if(i in sections&&sections[i]!==false&&sections[i]!==null) {
+
+		for (var i = min; i <= max; ++i) {
+			if (i in sections && sections[i] !== false && sections[i] !== null) {
 				var section = sections[i];
-				buffer+='<div id="noja_download_section_'+i+'">\n';
+				buffer += '<div id="noja_download_section_' + i + '">\n';
 				if (section._maegaki) {
 					buffer += '<div class="noja_download_maegaki">'
-						+section._maegaki.replace(/\r|\n/g, '')+'</div>\n';
+						+ section._maegaki.replace(/\r|\n/g, '') + '</div>\n';
 				}
-				if (section.chapter_title!=='') {
+				if (section.chapter_title !== '') {
 					buffer += '<div class="noja_download_chapter_title">'
-						+$('<div>').text(section.chapter_title).html()+'</div>\n';
+						+ $('<div>').text(section.chapter_title).html() + '</div>\n';
 				}
 				buffer += '<div class="noja_download_subtitle">'
-					+$('<div>').text(section.subtitle).html()+'</div>\n';
+					+ $('<div>').text(section.subtitle).html() + '</div>\n';
 				buffer += '<div class="noja_download_honbun">'
-					+section._honbun.replace(/\r|\n/g, '')+'</div>\n';
+					+ section._honbun.replace(/\r|\n/g, '') + '</div>\n';
 				if (section._atogaki) {
 					buffer += '<div class="noja_download_atogaki">'
-						+section._atogaki.replace(/\r|\n/g, '')+'</div>\n';
+						+ section._atogaki.replace(/\r|\n/g, '') + '</div>\n';
 				}
-				buffer+='</div>\n';
+				buffer += '</div>\n';
 			}
 		}
-		buffer += '</div>\n</div>\n</body>\n</html>';
-		return new Blob([buffer.replace(/(<br|<img[^>]*)>/g, '$1 />')]
-			,{type:'application/octet-stream'});
+		buffer += '</div>\n'
+			+'</div>\n'
+			+'</body>\n'
+			+'</html>';
+		return new Blob(
+			[buffer.replace(/(<br|<img[^>]*)>/g, '$1 />')]
+			, {type:'application/octet-stream'}
+		);
 	};
 	///////////////////////////////////////////
 	// 一部ではsec !== nullがないベタ展開コードがあったが問題ないので統合
@@ -3107,204 +3622,12 @@ $(document).ready(function(){
 	}
 
 
-	///////////////////////////////////////////
-	NarouSite.prototype.loadIndex = function (postprocess) {
-		$.ajax({
-			url: getNovelBaseURL(),
-			success: function(data) {
-				var index = $('.novel_title, .novel_writername, #novel_ex, .index_box'
-					, data);
-				$('#noja_index > div').html(index);
-
-				var a_series = $('#noja_index div.series > a');
-				if (a_series.size()) {
-					a_series.attr('href', site + a_series.attr('href').slice(1));
-				}
-				// @@ とりあえずstyle側の修正だけで様子見
-				//$('#noja_index > div > .index_box')
-				//	.css('margin', '')
-				//	.css('width', '')
-				//	;
-				// [オリジナルindex_box]
-				//   margin: 0 auto 30px;
-				//   width: 720px;
-				var i = 0;
-				$('#noja_index > div > .index_box a')
-					.attr('href', null)
-					.css('cursor', 'pointer')
-					.each(function(){
-						var ii = ++i;
-						$(this).bind('click', function(){
-							jumpTo(ii, 0);
-							$('#noja_index').hide(100);
-						});
-					});
-				generalAllNo = i;
-				maxSection = i;
-				auther = $('#noja_index .novel_writername')
-					.contents()
-					.not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]')
-					.text().slice(3);
-				postprocess (true);
-			},
-			error: function() {
-				postprocess (false);
-			}
-		});
-	}
-	NocMoonSite.prototype.loadIndex = function (postprocess) {
-		$.ajax({
-			url: getNovelBaseURL(),
-			success: function(data) {
-				var index = $('.novel_title, .novel_writername, #novel_ex, .index_box'
-					, data);
-				$('#noja_index > div').html(index);
-				var a_series = $('#noja_index div.series > a');
-				if (a_series.size()) {
-					a_series.attr('href', site + a_series.attr('href').slice(1));
-				}
-				// @@ とりあえずstyle側の修正だけで様子見
-				//$('#noja_index > div > .index_box')
-				//	.css('margin', '')
-				//	.css('width', '')
-				//	;
-				// [オリジナルindex_box]
-				//   margin: 0 auto 30px;
-				//   width: 720px;
-				var i = 0;
-				$('#noja_index > div > .index_box a')
-					.attr('href', null)
-					.css('cursor', 'pointer')
-					.each(function(){
-						var ii = ++i;
-						$(this).bind('click', function(){
-							jumpTo(ii, 0);
-							$('#noja_index').hide(100);
-						});
-					});
-				generalAllNo = i;
-				maxSection = i;
-				auther = $('#noja_index .novel_writername')
-					.contents()
-					.not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]')
-					.text().slice(3);
-				postprocess (true);
-			},
-			error: function() {
-				postprocess (false);
-			}
-		});
-	}
-
-	// 暁には全話表示モードもあるがそれはサポートしない
-	// indexが20話毎という話だったが何故かallになっている
-	//http://www.akatsuki-novels.com/stories/index/novel_id~6791
-	// この場合でもpage~1でページは取れる
-	// linkがあるかどうかで判定するしかないか？
-	// タグ等の有無で判定できるかも
-	// 'div.paging' or "div.paging-top"があるかないか？
-	// pagingは常にlastのlinkがあるのでmax数は分かる
-	// (last pageは分かる)
-	// 
-	//
-	//http://www.akatsuki-novels.com/stories/index/novel_id~3628
-	//http://www.akatsuki-novels.com/stories/index/page~16/novel_id~3628
-	//現1ページ／全16ページ、20件／全306件、1～20件を表示 
-	// これだと20話毎か？
-	// どうも閾値か設定か何かあるようだ
-	AkatsukiSite.prototype.getNovelBaseURL = function (novel_id) {
-		novel_id = (novel_id === undefined) ? ncode : novel_id;
-		return "http://www.akatsuki-novels.com/stories/index/novel_id~"+novel_id;
-	}
-	AkatsukiSite.prototype.loadIndex = function (postprocess) {
-		$.ajax({
-			url: this.getNovelBaseURL(),
-			success: function(data) {
-				// とりあえず作者部分は放置,storyも放置
-				var index = $('#LookNovel, div.story table.list', data);
-				$('#noja_index > div').html(index);
-				// シリーズ？
-				//var a_series = $('#noja_index div.series > a');
-				//if (a_series.size()) {
-				//	a_series.attr('href', site + a_series.attr('href').slice(1));
-				//}
-				//http://www.akatsuki-novels.com/stories/view/${section_id}/novel_id~${novel_id}
-				// build dict: sec_no => sec_id
-				// 
-				this.sectionMap = {};
-				var i = 0;
-				var a = $('#noja_index > div > table.list a');
-				a.attr('href', null)
-					.css('cursor', 'pointer')
-					.each(function(){
-						var ii = ++i;
-						$(this).bind('click', function(){
-							jumpTo(ii, 0);
-							$('#noja_index').hide(100);
-						});
-					});
-				generalAllNo = i;
-				maxSection = i;
-				//auther = $('#noja_index .novel_writername')
-				//	.contents()
-				//	.not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]')
-				//	.text().slice(3);
-				postprocess (true);
-			},
-			error: function() {
-				postprocess (false);
-			}
-		});
-	}
-
-	//http://novel.syosetu.org/1350/
-	//http://novel.syosetu.org/1350/8.html
-	HamelnSite.prototype.loadIndex = function (postprocess) {
-		$.ajax({
-			url: getNovelBaseURL(),
-			success: function(data) {
-				var index = $('.novel_title, .novel_writername, #novel_ex, .index_box'
-					, data);
-				$('#noja_index > div').html(index);
-				var a_series = $('#noja_index div.series > a');
-				if (a_series.size()) {
-					a_series.attr('href', site + a_series.attr('href').slice(1));
-				}
-				// @@ とりあえずstyle側の修正だけで様子見
-				//$('#noja_index > div > .index_box')
-				//	.css('margin', '')
-				//	.css('width', '')
-				//	;
-				// [オリジナルindex_box]
-				//   margin: 0 auto 30px;
-				//   width: 720px;
-				var i = 0;
-				$('#noja_index > div > .index_box a')
-					.attr('href', null)
-					.css('cursor', 'pointer')
-					.each(function(){
-						var ii = ++i;
-						$(this).bind('click', function(){
-							jumpTo(ii, 0);
-							$('#noja_index').hide(100);
-						});
-					});
-				generalAllNo = i;
-				maxSection = i;
-				auther = $('#noja_index .novel_writername')
-					.contents()
-					.not('a[href^="http://syosetu.com/bookmarker/add/ncode/"]')
-					.text().slice(3);
-				postprocess (true);
-			},
-			error: function() {
-				postprocess (false);
-			}
-		});
-	}
 
 	///////////////////////////////////////////
 	// 目次読み込み
+	// silentモード対応にして
+	// Hameln等のmaxSectioNo関連はこっちを使うようにしたいところ
+	//
 	$.templates("loadIndexTmpl"
 		, '目次の読み込み中...<br /><img src="{{:image}}" />');
 
@@ -3320,13 +3643,15 @@ $(document).ready(function(){
 		var prev = getIndexPageStatus();
 		setIndexPageStatus (INDEXPAGE_NOWLOADING);
 		++loading;
-		siteParser.loadIndex(function (success) {
+		siteParser.loadIndex(function (maxSectionNo) {
 			--loading;
-			if (success) {
-				setIndexPageReady();
-			} else {
+			if (maxSectionNo === false) {
 				setIndexPageStatus (prev);
 				$('#noja_loading').html('目次の読み込みに失敗しました');
+			} else {
+				generalAllNo = maxSectionNo;
+				maxSection = maxSectionNo;
+				setIndexPageReady();
 			}
 		});
 	}
@@ -3539,8 +3864,12 @@ $(document).ready(function(){
 							showPage();
 						} else {
 							var i;
-							for(i = 1; i < sections.length&&!(i in sections); ++i);
-							if(i==currentSection) i = -1;
+							for (i = 1; i < sections.length && !(i in sections); ++i) {
+								;
+							}
+							if (i == currentSection) {
+								i = -1;
+							}
 							jumpTo(i, 0);
 						}
 					}); 
@@ -3549,12 +3878,12 @@ $(document).ready(function(){
 			$("#noja_file").bind('change', fn5);
 			$("#noja_yomikomi").bind('click', function(){
 				nojaImport(lsc(noja_option.app_yomikomi_setumei), function(){
-					jumpTo(currentSection==1?-1:1, 0);
+					jumpTo(currentSection == 1 ? -1 : 1, 0);
 				});
 			});
 			$("#noja_kokuhaku").bind('click', function(){
 				nojaImport(lsc(noja_option.app_kokuhaku), function(){
-					jumpTo(currentSection==1?-1:1, 0);
+					jumpTo(currentSection == 1 ? -1 : 1, 0);
 				});
 			});
 		};
@@ -3699,6 +4028,7 @@ $(document).ready(function(){
 					jumpTo(currentSection - 1, 0);
 					break;
 				case VK_DOWN:
+					//console.debug('currentSection', currentSection);
 					jumpTo(currentSection + 1, 0);
 					break;
 				case VK_PAGEUP:
@@ -3848,7 +4178,8 @@ $(document).ready(function(){
 				if (dragging) {
 					dragging = false;
 					// [0.083... , 200.083..]が実測値
-					slidePos = $('#noja_drag').offset().left + 4 - $('#noja_dragback').offset().left;
+					slidePos = $('#noja_drag').offset().left
+						+ 4 - $('#noja_dragback').offset().left;
 					var lc = calcLC(slidePos2ZoomRatio (slidePos));
 					char_num = lc.char_num;
 					line_num = lc.line_num;
@@ -3882,52 +4213,88 @@ $(document).ready(function(){
 			});
 			////////////////
 			$('#noja_index > a').bind('click', loadIndex);
-			$('#noja_openconfig').bind('click', function() {
-				togglePopup('#noja_config');
-				var left = $('#noja_openconfig').offset().left;
-				var width = $('#noja_config').width();
+			//
+			var adjusting_menu_open_handler = function (menu, menu_open) {
+				togglePopup(menu);
+				var left = $(menu_open).offset().left;
+				var width = $(menu).width();
 				var max = $('#noja_main').width();
-				if (left + width + 22 > max) left = max-width-22;
-				$('#noja_config').css({left:left, top:$('#noja_menu').height()});
+				if (left + width + 22 > max) {
+					left = max - width - 22;
+				}
+				$(menu).css({
+					left: left,
+					top: $('#noja_menu').height()
+				});
+			}
+
+			$('#noja_openconfig').bind('click', function() {
+				adjusting_menu_open_handler ('#noja_config', '#noja_openconfig');
 			});
 			$('#noja_openconfig2').bind('click', function() {
-				togglePopup('#noja_config2');
-				var left = $('#noja_openconfig2').offset().left;
-				var width = $('#noja_config2').width();
-				var max = $('#noja_main').width();
-				if (left + width + 22 > max) left = max-width-22;
-				$('#noja_config2').css({left:left, top:$('#noja_menu').height()});
+				adjusting_menu_open_handler ('#noja_config2', '#noja_openconfig2');
 			});
-			$('#noja_closeconfig').bind('click', function() { $('#noja_config').hide(); });
-			$('#noja_closeconfig2').bind('click', function() { $('#noja_config2').hide(); });
-			$('#noja_opensaveload').bind('click', function() { togglePopup('#noja_saveload'); });
-			$('#noja_closesaveload').bind('click', function() { $('#noja_saveload').hide(); });
+			$('#noja_closeconfig').bind('click', function() {
+				$('#noja_config').hide();
+			});
+			$('#noja_closeconfig2').bind('click', function() {
+				$('#noja_config2').hide();
+			});
+			$('#noja_opensaveload').bind('click', function() {
+				togglePopup('#noja_saveload');
+			});
+			$('#noja_closesaveload').bind('click', function() {
+				$('#noja_saveload').hide();
+			});
 			$('#noja_openlink').bind('click', function() {
-				togglePopup('#noja_link');
-				var left = $('#noja_openlink').offset().left;
-				var width = $('#noja_link').width();
-				var max = $('#noja_main').width();
-				if (left + width + 22 > max) left = max-width-22;
-				$('#noja_link').css({left:left, top:$('#noja_menu').height()});
+				adjusting_menu_open_handler ('#noja_link', '#noja_openlink');
 			});
-			$('#noja_closelink').bind('click', function() { $('#noja_link').hide(); });
-			$('#noja_openhelp').bind('click', function() { togglePopup('#noja_help');});
-			$('#noja_closehelp').bind('click', function() { $('#noja_help').hide(); });
-			$('#noja_openversion').bind('click', function() { togglePopup('#noja_version'); });
-			$('#noja_closeversion').bind('click', function() { $('#noja_version').hide(); });
-			$('#noja_openhyouka').bind('click', function() { togglePopup('#noja_hyouka') });
-			$('#noja_closehyouka').bind('click', function() { $('#noja_hyouka').hide(); });
-			$('#noja_closedv').bind('click', function() { $('#noja_download_view').hide(); });
-			$('#noja_save').bind('click', function() { nojaSave(); });
-			$('#noja_restore').bind('click', function() { nojaRestore(ncode); });
+			$('#noja_closelink').bind('click', function() {
+				$('#noja_link').hide();
+			});
+			$('#noja_openhelp').bind('click', function() {
+				togglePopup('#noja_help');
+			});
+			$('#noja_closehelp').bind('click', function() {
+				$('#noja_help').hide();
+			});
+			$('#noja_openversion').bind('click', function() {
+				togglePopup('#noja_version');
+			});
+			$('#noja_closeversion').bind('click', function() {
+				$('#noja_version').hide();
+			});
+			$('#noja_openhyouka').bind('click', function() {
+				togglePopup('#noja_hyouka')
+			});
+			$('#noja_closehyouka').bind('click', function() {
+				$('#noja_hyouka').hide();
+			});
+			$('#noja_closedv').bind('click', function() {
+				$('#noja_download_view').hide();
+			});
+			$('#noja_save').bind('click', function() {
+				nojaSave();
+			});
+			$('#noja_restore').bind('click', function() {
+				nojaRestore(ncode);
+			});
 			$('#noja_download').bind('click', function() {
 				var evt = document.createEvent("MouseEvents");
-				evt.initMouseEvent("click", true, true, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
-				$('<a>').attr({href:URL.createObjectURL(createSaveData(1, sections.length-1)), download:title+'.noja.html'}).get(0).dispatchEvent(evt);
+				evt.initMouseEvent("click", true, true, window
+					, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+				$('<a>')
+					.attr({
+						href: URL.createObjectURL(createSaveData(1, sections.length - 1)),
+						download: title + '.noja.html'
+					})
+					.get(0)
+					.dispatchEvent(evt);
 			});
 			$('#noja_download2').bind('click', function() {
 				var evt = document.createEvent("MouseEvents");
-				evt.initMouseEvent("click", true, true, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+				evt.initMouseEvent("click", true, true, window
+					, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
 				var f=function(i){return i<10?'0'+i:''+i; };
 				var D = new Date();
 				var Y = D.getFullYear(); 
@@ -3936,7 +4303,13 @@ $(document).ready(function(){
 				var h = f(D.getHours()); 
 				var i  = f(D.getMinutes()); 
 				var s  = f(D.getSeconds());
-				$('<a>').attr({href:URL.createObjectURL(createSaveData(1, sections.length-1)), download:title+'('+Y+'-'+m+'-'+d+' '+h+'-'+i+'-'+s+').noja.html'}).get(0).dispatchEvent(evt);
+				$('<a>')
+					.attr({
+						href: URL.createObjectURL(createSaveData(1, sections.length-1)),
+						download: title+'('+Y+'-'+m+'-'+d+' '+h+'-'+i+'-'+s+').noja.html'
+					})
+					.get(0)
+					.dispatchEvent(evt);
 			});
 			$('#noja_download3').bind('click', function() {
 				$('#noja_dv_main').empty();
@@ -3955,18 +4328,23 @@ $(document).ready(function(){
 				closePopup();
 				$('#noja_download_view').show();
 			});
+			//////////////////////////////////
+			// 評価form部分をhtmlリソースからロード
 			$('#noja_hyouka td:eq(0)').html(lsc(hyouka_html));
 			$('#noja_hyouka td:eq(1)').empty()
 				.append(lsc(hyoukanavi_html))
 				.append(lsc(kansou_html));
-			$('#noja_hyouka .hyoukanavi a:eq(0)').bind('click', function(){
-				$('#noja_f_cr').show();
-				$('#noja_r_fc').hide();
-			});
-			$('#noja_hyouka .hyoukanavi a:eq(1)').bind('click', function(){
-				$('#noja_f_cr').hide();
-				$('#noja_r_fc').show();
-			});
+			$('#noja_hyouka .hyoukanavi a:eq(0)')
+				.bind('click', function(){
+					$('#noja_f_cr').show();
+					$('#noja_r_fc').hide();
+				});
+			$('#noja_hyouka .hyoukanavi a:eq(1)')
+				.bind('click', function(){
+					$('#noja_f_cr').hide();
+					$('#noja_r_fc').show();
+				});
+			//////////////////////////////////////////////
 			size = {width:800};
 			//////////////////////////////////////////////
 			// appmodeならlink部分は作り直し
@@ -3977,7 +4355,7 @@ $(document).ready(function(){
 			//////////////////
 			// 次stageへのchain: appmodeだとコンテンツ読み込み経由の非同期
 			if (noja_option.appmode) {
-				nojaImport(lsc(noja_option.app_setumei), function(){
+				nojaImport (lsc (noja_option.app_setumei), function() {
 					initialize_stage4();
 				});
 			} else {
@@ -3993,12 +4371,12 @@ $(document).ready(function(){
 			h.find('.novel_hyouka form').attr('action', getNovelPointRegisterURL());
 			h.find('.novel_hyouka .agree')
 				.html('<input type="hidden" value="'
-				+(login
-					? (token+'" name="token" /><input type="submit" class="button" value="評価する" id="pointinput" />')
+				+ (login
+					? (token + '" name="token" /><input type="submit" class="button" value="評価する" id="pointinput" />')
 					:  ('" name="token" />※評価するにはログインしてください。')
 				));
 			if (!noja_option.appmode
-				&& site.indexOf('http://novel18.syosetu.com/') == 0) {
+				&& siteParser.site.indexOf('http://novel18.syosetu.com/') == 0) {
 				['#noja_impression_usertype', '#noja_novelreview_usertype']
 					.forEach(function (elem) {
 						$(elem).html('<select name="usertype"><option value="xuser">Xアカウントで書き込み</option><option value="">通常アカウントで書き込み</option></select>');
@@ -4044,7 +4422,7 @@ $(document).ready(function(){
 
 			h.find('.hyouka_in:eq(1) > a')
 				.attr('href', 'http://twitter.com/intent/tweet?text='
-					+encodeURIComponent(getNovelBaseURL()+'\n「'+title
+					+encodeURIComponent(siteParser.getNovelBaseURL()+'\n「'+title
 						+'」読んだ！\n#narou #narou'+ncode.toUpperCase())
 				).find('img').attr('src', twitter_banner);
 		};
@@ -4075,6 +4453,12 @@ $(document).ready(function(){
 					$('#noja_container').ready(nojaOpen());
 				}
 			}
+			initialize_stage5();
+		};
+		///////////////
+		// 暁のindex等勝手に動いて欲しいasyncなものを起動させる
+		var initialize_stage5 = function() {
+			siteParser.startAsyncProcess();
 		};
 
 		///////////////////////////////////////////////////////
@@ -4088,58 +4472,81 @@ $(document).ready(function(){
 					var k = ls.key(i);
 					var v = ls.getItem(k);
 					switch(k) {
-					case 'noja_alwaysOpen': buf1.alwaysOpen = v==='true'; break;
-					case 'noja_allpage': buf1.allpage = v==='true'; break;
-					case 'noja_layout': buf1.layout = v==='true'; break;
-					case 'noja_fontType': buf1.fontType = v; break;
-					case 'noja_slidePos': buf1.slidePos = parseInt(v); break;
+					case 'noja_alwaysOpen': buf1.alwaysOpen = (v === 'true'); break;
+					case 'noja_allpage':    buf1.allpage    = (v === 'true'); break;
+					case 'noja_layout':     buf1.layout     = (v === 'true'); break;
+					case 'noja_fontType':   buf1.fontType   = v; break;
+					case 'noja_slidePos':   buf1.slidePos   = parseInt(v); break;
 					default:
 						k.match(/(noja)_([^_]*)_(fMaegaki|fAtogaki|kaigyou)/);
-						if(RegExp.$1==='noja') {
-							if(RegExp.$2==='undefined'||RegExp.$2 === 'novelview') break;
-							if (!(RegExp.$2 in buf2)) buf2[RegExp.$2] = { ncode:RegExp.$2 }; 
-							buf2[RegExp.$2][RegExp.$3] = v===true;
+						if (RegExp.$1 === 'noja') {
+							if (RegExp.$2 === 'undefined' || RegExp.$2 === 'novelview') {
+								break;
+							}
+							if (!(RegExp.$2 in buf2)) {
+								buf2[RegExp.$2] = { ncode: RegExp.$2 };
+							}
+							buf2[RegExp.$2][RegExp.$3] = (v === true);
+						} else {
+							continue;
 						}
-						else continue;
 					}
 					buf3.push(k);
 				}
-				for (var i in buf1) save('global', buf1[i], i);
-				for (var i in buf2) save('ncode', buf2[i]);
-				for (var i = 0; i < buf3.length; ++i) ls.removeItem(buf3[i]);
+				for (var i in buf1) {
+					save('global', buf1[i], i);
+				}
+				for (var i in buf2) {
+					save('ncode', buf2[i]);
+				}
+				for (var i = 0; i < buf3.length; ++i) {
+					ls.removeItem(buf3[i]);
+				}
 			}
 		})(noja_option.localStorage);
 
 		// 非同期に設定を読み込んでいるのでどれがどの順番で読まれるか不明
 		// 終わった段階でinitialize_stage1()が呼ばれる
-		var i = 6;
+		var loading_wait_count = 6;
 		load('global', 'fontType', function(result){
 			fontType = (result !=='gothic') ? 'mincho' : 'gothic';
 			if (fontType === 'gothic') {
 				fontFamily = gothic;
 			}
-			if (--i===0) initialize_stage1();
+			if (--loading_wait_count === 0) {
+				initialize_stage1();
+			}
 		});
 		load('global', 'alwaysOpen', function(result){
 			alwaysOpen = (noja_option.appmode)
 				? (result !== false) : (result === true);
-			if (--i===0) initialize_stage1();
+			if (--loading_wait_count === 0) {
+				initialize_stage1();
+			}
 		});
 		load('global', 'allpage', function(result){
-			allpage = result === true;
-			if (--i===0) initialize_stage1();
+			allpage = (result === true);
+			if (--loading_wait_count === 0) {
+				initialize_stage1();
+			}
 		});
 		load('global', 'yokogaki', function(result){
-			yokogaki = result === true;
-			if (--i===0) initialize_stage1();
+			yokogaki = (result === true);
+			if (--loading_wait_count === 0) {
+				initialize_stage1();
+			}
 		});
 		load('global', 'layout', function(result){
-			layout = result === true;
-			if (--i===0) initialize_stage1();
+			layout = (result === true);
+			if (--loading_wait_count === 0) {
+				initialize_stage1();
+			}
 		});
 		load('global', 'slidePos', function(result){
 			slidePos = (!valid(result)) ? 100 : result;
-			if (--i===0) initialize_stage1();
+			if (--loading_wait_count === 0) {
+				initialize_stage1();
+			}
 		});
 
 	};

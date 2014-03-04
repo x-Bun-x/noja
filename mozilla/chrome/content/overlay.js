@@ -68,7 +68,7 @@ var onPageLoad = function(e) {
 		/chrome:\/\/noja\/content\/app\/index\.html/,
 		/http:\/\/(ncode|novel18)\.syosetu\.com\/n/,
 		/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/\d+\/novel_id~\d+/,
-		/http:\/\/novel\.syosetu\.org\/\d+\/\d+\.html/
+		/http:\/\/novel\.syosetu\.org\/\d+\/(|index\.html|\d+\.html)/
 	];
 	var matched = false;
 	var url = document.URL;
