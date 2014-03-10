@@ -1,5 +1,6 @@
 /*jshint laxbreak: true, laxcomma: true, unused:false, newcap:false */
 /*global noja_option:false, $:false, console:false */
+
 /*! のじゃー縦書リーダー ver.1.13.* (c) 2013 ◆TkfnIljons */
 $(document).ready(function(){
 	'use strict';
@@ -48,11 +49,13 @@ $(document).ready(function(){
 		fncSave ('global', value, key);
 	};
 
-	// fncLoadは非同期callbackだったがdefferedに変更
+	// fncLoadは非同期callbackだったがDeferredに変更
 	var fncLoad = noja_option.load;
 	var fncDeleteItem = noja_option.deleteItem;
 
 	//定数
+
+	var reAllLineBreak = /\r|\n/g;
 
 	//ここらへんは変更できるようにするかも
 
@@ -82,6 +85,22 @@ $(document).ready(function(){
 	var BURASAGE = '、。，．）」｝〉》』】］〕〙〛〟”’　';
 	//表示位置を変更する小文字
 	var KOMOJI = 'ぃゃぃゃぉゅぁっぃょュゎァッィぅぇゥェォヵヶャョヮ\u3095\u3096\u31F0\u31F1\u31F2\u31F3\u31F4\u31F5\u31F6\u31F7\u31F8\u31F9\u31F7\u31FA\u31FB\u31FC\u31FD\u31FE\u31FF';
+
+	// 3099-309Cまでの記号
+	// 3099は濁点の右上位置にあるもの(合成用？)
+	// 309Aは半濁点の右上位置にあるもの(合成用？)
+	// 309Bは単体の濁点(左上位置)
+	// 309Cは単体の半濁点(左上位置)
+	// COMBINING KATAKANA-HIRAGANA VOICED SOUND MARK (U+3099)
+	// COMBINING KATAKANA-HIRAGANA SEMI-VOICED SOUND MARK (U+309A)
+	// KATAKANA-HIRAGANA VOICED SOUND MARK (U+309B)
+	// KATAKANA-HIRAGANA SEMI-VOICED SOUND MARK (U+309C)
+	var VOICED_SOUND_MARK = '゛゜\u3099\u309A';
+
+	// 大き目にする特殊記号
+	var TOWIDEWIDTHSYMBOLS = '☹☺☻☼♠♡♢♣♤♥♦♧♫♬♮';
+
+
 	//標準的な明朝体フォントの列挙
 	var FONTFAMILY_MINCHO = '"ＭＳ 明朝","MS Mincho","ヒラギノ明朝 ProN W3","Hiragino Mincho ProN","ヒラギノ明朝 Pro W3","Hiragino Mincho Pro","Takao明朝","TakaoMincho","IPA モナー 明朝","IPA mona Mincho","さざなみ明朝","Sazanami Mincho","IPA明朝","IPAMincho","東風明朝","kochi Mincho"';
 	var FONTTYPE_MINCHO = 'mincho';
@@ -91,6 +110,14 @@ $(document).ready(function(){
 
 	//ダウンロードファイルにコメントで仕込むデータ。
 	var DOWNLOAD_ID = '@noja{7B87A1A7-2920-4281-A6D9-08556503D3E5}';
+
+
+	var validateBool = function (value, default_value) {
+		if (value !== true && value !== false) {
+			value = default_value;
+		}
+		return value;
+	};
 
 
 	// 固定パラメータ
@@ -115,8 +142,6 @@ $(document).ready(function(){
 	var alignLeft = function (x, ctx, text) {
 		return x;
 	};
-	//追加:1画面あたりのページ数(単ページ対応への布石)
-	var gPagesPerCanvas = 2;
 	// 判型可変化への対応
 	var gEnableFlexibleAspect = true;
 
@@ -124,6 +149,9 @@ $(document).ready(function(){
 	//
 	//なろうapiで取って来るgeneral_all_no。つまり全話数。
 	//まあ目次読み込んだらいいって話もあるんだけど。
+	// これは
+	//  null(未確定)→false(load中)→数値(確定値)
+	// の状態遷移をする
 	var gGeneralAllNo = null;
 
 	//表示部分のサイズ。実際のサイズの2倍
@@ -150,104 +178,735 @@ $(document).ready(function(){
 
 	//のじゃーが起動しているか否かのフラグ
 	var gIsNojaOpen = false;
-	//読み込み中にセットされるページとセクション番号。
-	//読み込み前に保存した数が終了後と同じだったらそのまま新しく読み込んだ話にジャンプ
-	//そうでなかったらユーザーの操作で移動したことになるため、ジャンプしない
-	var gNextPage = 0;
-	var gNextSection;
-	//現在のセクションの合計表示ページ数。
-	var gTotalPages;
+
 	//画像onLoad時にページナビゲーションを再描写するかどうか決めるために使う
-	var gLoadSection;
+	var gParseSectionId;
 	//メイン画面のコンテキスト。
 	var gMainContext;
 
-
+	//読み込み中フラグ
+	var gNetworkManager = {
+		isLoading: 0,
+		isBusy: function () {
+			return this.isLoading !== 0;
+		},
+		get: function () {
+			if (this.isLoading === 0) {
+				++this.isLoading;
+				return true;
+			}
+			return false;
+		},
+		release: function () {
+			if (this.isLoading !== 0) {
+				--this.isLoading;
+				return true;
+			}
+			return false;
+		},
+	};
 	// objectとして隠蔽する
-
-	//目次が読み込まれているかどうかのフラグ。ture:読み込まれている、false:読み込み失敗、null:読み込むな（短編）
-	var gIsIndexPageAvailable;
-
-	var INDEXPAGE_READY = true;
-	var INDEXPAGE_NOTREADY = false;
-	var INDEXPAGE_DISABLE = null;
-	var INDEXPAGE_NOWLOADING = 0;
-
-	var setIndexPageStatus = function (status) {
-		gIsIndexPageAvailable = status;
+	// loadIndexもこれの配下に置く
+	var gIndexManager = {
+		INDEXPAGE_READY: true,
+		INDEXPAGE_NOTREADY: false,
+		INDEXPAGE_DISABLE: null,
+		INDEXPAGE_NOWLOADING: 0,
+		//目次が読み込まれているかどうかのフラグ。
+		//ture:読み込まれている、false:読み込み失敗、null:読み込むな（短編）
+		isIndexPageAvailable: null,
+		previousStatus: null,
+		//
+		reset: function () {
+			this.isIndexPageAvailable = this.INDEXPAGE_DISABLE;
+		},
+		setIndexPageStatus: function (status) {
+			this.isIndexPageAvailable = status;
+		},
+		getIndexPageStatus: function () {
+			return this.isIndexPageAvailable;
+		},
+		//
+		setIndexPageReady: function () {
+			this.isIndexPageAvailable = this.INDEXPAGE_READY;
+		},
+		setIndexPageNotReady: function () {
+			this.isIndexPageAvailable = this.INDEXPAGE_NOTREADY;
+		},
+		setIndexPageDisabled: function () {
+			this.isIndexPageAvailable = this.INDEXPAGE_DISABLE;
+		},
+		setLoadingStart: function () {
+			this.previousStatus = this.isIndexPageAvailable;
+			this.isIndexPageAvailable = this.INDEXPAGE_NOWLOADING;
+		},
+		setLoadingSuccess: function () {
+			this.isIndexPageAvailable = this.INDEXPAGE_NOTREADY;
+		},
+		setLoadingFailed: function () {
+			this.isIndexPageAvailable = this.previousStatus;
+		},
+		isIndexPageNowLoading: function () {
+			return this.isIndexPageAvailable === this.INDEXPAGE_NOWLOADING;
+		},
+		isIndexPageReady: function () {
+			return this.isIndexPageAvailable === this.INDEXPAGE_READY;
+		},
+		isIndexPageNotReady: function () {
+			return this.isIndexPageAvailable === this.INDEXPAGE_NOTREADY;
+		},
+		isIndexPageDisable: function () {
+			return this.isIndexPageAvailable === this.INDEXPAGE_DISABLE;
+		},
+		// コンテキストスイッチが関数call単位で発生するなら色々まずいが、
+		// 非同期関数以外では明示的なコンテキストスイッチは発生しないはず。
+		// check & go-message & callの間で他のreqが入ることはなかろう。
+		ERROR_ALREADY_LOADING: -1,
+		ERROR_LOAD_FAILURE: -2,
+		load: function() {
+			if (this.isIndexPageNowLoading()) {
+				// 自前のerror statusを返す
+				return $.Deferred()
+					.reject(this.ERROR_ALREADY_LOADING).promise();
+			}
+			gIndexManager.setLoadingStart();
+			return gSiteParser.loadIndex().then(
+				function (maxSectionNo) {
+					gIndexManager.setLoadingSuccess();
+				},
+				function () {
+					gIndexManager.setLoadingFailed();
+					// 自前のerror statusを返す
+					return $.Deferred()
+						.reject (this.ERROR_LOAD_FAILURE).promise();
+				}
+			);
+		},
 	};
-	var getIndexPageStatus = function () {
-		return gIsIndexPageAvailable;
-	};
-	//
-	var setIndexPageReady = function () {
-		setIndexPageStatus (INDEXPAGE_READY);
-	};
-	var setIndexPageNotReady = function () {
-		setIndexPageStatus (INDEXPAGE_NOTREADY);
-	};
-	var setIndexPageDisabled = function () {
-		setIndexPageStatus (INDEXPAGE_DISABLE);
-	};
-	var isIndexPageReady = function () {
-		return getIndexPageStatus() === INDEXPAGE_READY;
-	};
-	var isIndexPageNotReady = function () {
-		return getIndexPageStatus() === INDEXPAGE_NOTREADY;
-	};
-	var isIndexPageDisable = function () {
-		return getIndexPageStatus() === INDEXPAGE_DISABLE;
-	};
-
 	//////////////////////////////////////////////////////////////////////
 	//データ
 
 	//////////////////////////////
 	//現在読んでいる話(第一話が1)
-	var gCurrentSection = {};
-	gCurrentSection.id = 0;		// constなデータというよりはview側の事情
-	//現在表示しているページ(ページ番号はこれ+1)
-	gCurrentSection.page = 0;		// constなデータというよりはview側の事情
-	//////////////////////////////
-	//話データの配列。
-	var sections = [];
-		// これらの5要素が保存される
-		// ただし、文章部分はraw側が保存される
-		//章タイトル
-		gCurrentSection.chapter_title = null;
-		//サブタイトル
-		gCurrentSection.subtitle = null;
-		//本文と前書きと後書きをパースしたデータ
+	var gCurrentManager = {
+		id: -1,		// constなデータというよりはview側の事情
+		//現在表示しているページ(ページ番号はこれ+1)
+		page: -1,		// constなデータというよりはview側の事情
+		//現在のセクションの合計表示ページ数。
+		totalPages: -1,
+		sectionData: null,
+		//追加:1画面あたりのページ数(単ページ対応への布石)
+		pagesPerCanvas: 2,
 		//
-		//
-		gCurrentSection.honbun  = null;	// [0] body [1] ruby
-		gCurrentSection.maegaki = null;	// [0] body [1] ruby
-		gCurrentSection.atogaki = null;
+		reset: function () {
+			this.id = -1;
+			this.page = -1;
+			this.totalPages = -1;
+			this.sectionData = null;
+			this.pagesPerCanvas = 2;
+		},
+		// このあたりの外部連動する部分は
+		// デフォルトでbindされたobserverへのnotifyだと見做しておく
+		// 一々監視者側の初期化でregistしにくるのも面倒だし
+		// そこまで汎用的なモジュール化をしたいわけでもなし
+		setSingleSection: function (singleSection) {
+			if (singleSection) {
+				// 短編
+				gIndexManager.setIndexPageDisabled ();
+				gGeneralAllNo = 1;
+				this.setCurrent (1);
+			} else {
+				// 連載
+				gIndexManager.setIndexPageNotReady();
+			}
+		},
+		getPageMap: function (setting) {
+			return new PageMap (this.sectionData, setting);
+		},
+
+		// 値コピーじゃなくてrefを設定するだけでいいのかも？
+		setCurrent: function (secId) {
+			//console.debug('setCurrent', secId, gSectionManager.getData(secId));
+			this.id = secId;
+			this.page = 0;		// pageも初期化がいる？
+			// このあたりはsection構造そのままcopyでいいはず
+			this.sectionData = gSectionManager.getData (secId);
+		},
+		// アライメント補正はなし
+		// 数える対象はグローバル変数に入ったもの
+		countPages: function (setting) {
+			return gSectionManager.countPages (this.sectionData, setting);
+		},
+		// setting切り替えに伴って変化するのだが…
+		updateTotalPages: function (setting) {
+			this.totalPages = this.countPages (this.sectionData, setting);
+		},
+		hasMaegaki: function () {
+			return (this.sectionData.maegaki !== null);
+		},
+		hasAtogaki: function () {
+			return (this.sectionData.atogaki !== null);
+		},
+		getTitle: function () {
+			return {
+				subtitle: this.sectionData.subtitle,
+				chapter_title: this.sectionData.chapter_title,
+			};
+		},
+		isLastPage: function () {
+			return (this.page >= (this.totalPages + 
+				(this.totalPages % this.pagesPerCanvas) - this.pagesPerCanvas));
+		},
+		// @@ 単ページ対応済 @@
+		getNextPage: function () {
+			var newPageNo = this.page + this.pagesPerCanvas;
+			// total pageを超えたらnullを返す
+			if (newPageNo >= this.totalPages) {
+				return null;
+			}
+			return newPageNo;
+		},
+		getPrevPage: function () {
+			var newPageNo = this.page - this.pagesPerCanvas;
+			// 0を下回ったらnullを返す
+			if (newPageNo < 0) {
+				return null;
+			}
+			return newPageNo;
+		},
+		// 単ページ対応:切り上げ
+		getPagesAlinedCanvas: function (npages) {
+			var rem = npages % this.pagesPerCanvas;
+			if (rem !== 0) {
+				npages += (this.pagesPerCanvas - rem);
+			}
+			return npages;
+		},
+		// 偶数ページ化(右ページ):切り捨て
+		getFirstPageAlinedCanvas: function (pageNo) {
+			return pageNo - (pageNo % this.pagesPerCanvas);
+		},
+
+	};
 	//////////////////////////////
+	//話データ
+	// 5要素が保存される
+	// 文章部分はraw側が保存される
+	function SectionData () {
+		// 章タイトル
+		this.chapter_title = null;
+		// サブタイトル
+		this.subtitle = null;
+		// raw: html data
+		this._honbun  = null;
+		this._maegaki = null;
+		this._atogaki = null;
+		// parsed: 本文と前書きと後書きをパースしたデータ
+		this.honbun  = null;	// [0] body [1] ruby
+		this.maegaki = null;	// [0] body [1] ruby
+		this.atogaki = null;	// [0] body [1] ruby
+	}
+
+	// 各パーツのページ数は.size (.lengthはちょいリスキーかな？)
+	function PageMap (secData, setting) {
+		this.FRONT_MATTER = 0;
+		this.MAIN_TEXT    = 1;
+		this.BACK_MATTER  = 2;
+
+		this.text = secData;
+		this.setting = setting;
+
+		var n = 0;
+		//
+		this.begin = n;
+		//
+		this.maegaki = {};
+		this.maegaki.begin = n;
+		if (setting.fMaegaki && secData.maegaki !== null
+			&& secData.maegaki !== undefined) {
+			n += secData.maegaki[0].length;
+		}
+		this.maegaki.end = n;
+		this.maegaki.size = this.maegaki.end - this.maegaki.begin;
+		//
+		this.honbun = {};
+		this.honbun.begin = n;
+		if (secData.honbun !== null && secData.honbun !== undefined) {
+			n += secData.honbun[0].length;
+		}
+		this.honbun.end = n;
+		this.honbun.size = this.honbun.end - this.honbun.begin;
+		//
+		this.atogaki = {};
+		this.atogaki.begin = n;
+		if (setting.fAtogaki && secData.atogaki !== null
+			&& secData.atogaki !== undefined) {
+			n += secData.atogaki[0].length;
+		}
+		this.atogaki.end = n;
+		this.atogaki.size = this.atogaki.end - this.atogaki.begin;
+		//
+		this.end = n;
+		this.size = this.end - this.begin;
+		//
+	}
+	PageMap.prototype = {
+		getPageInfo: function (pageNo) {
+			if (pageNo < this.maegaki.end) {
+				return {
+					type: this.FRONT_MATTER,
+					offset: pageNo - this.maegaki.begin,
+				};
+			} else if (pageNo < this.honbun.end) {
+				return {
+					type: this.MAIN_TEXT,
+					offset: pageNo - this.honbun.begin,
+				};
+			}
+			return {
+				type: this.BACK_MATTER,
+				offset: pageNo - this.atogaki.begin,
+			};
+		},
+		isMainTextFirstPage: function (pageNo) {
+			return (pageNo == this.honbun.begin);
+		},
+		isMainTextPage: function (pageNo) {
+			return (this.getPageInfo (pageNo).type == this.MAIN_TEXT);
+		},
+		getPageText: function (pageNo) {
+			var pageInfo = this.getPageInfo (pageNo);
+			var text = null;
+			switch (pageInfo.type) {
+			case this.FRONT_MATTER:		// 前書き
+				text = this.text.maegaki;
+				break;
+			case this.MAIN_TEXT:		// 本文
+				text = this.text.honbun;
+				break;
+			case this.BACK_MATTER:		// 後書き
+				text = this.text.atogaki;
+				break;
+			}
+			return {
+				bodyLines: text[0][pageInfo.offset],
+				rubyLines: text[1][pageInfo.offset],
+			};
+		},
+	};
+
+
+	// 
+	var gSectionManager = {
+		// remake対策でformat paramを覚えておくほうがいいか？
+		sectionDB: {},
+		clear: function () {
+			sectionDB = {};
+		},
+		//SECTION_STATUS_TRUE: true,
+		SECTION_STATUS_LOADING: true,
+		SECTION_STATUS_INVALID: false,
+
+		isSectionReady: function (secId) {
+			return ((secId in this.sectionDB) && this.sectionDB[secId] !== null
+				&& this.sectionDB[secId] !== true
+				&& this.sectionDB[secId] !== false
+			);
+		},
+		isSectionNotLoading: function (secId) {
+			return (!(secId in this.sectionDB) || this.sectionDB[secId] === null
+				|| this.sectionDB[secId] === this.SECTION_STATUS_INVALID
+			);
+		},
+		isSectionLoading: function (secId) {
+			return (this.sectionDB[secId] === this.SECTION_STATUS_LOADING);
+		},
+		setStatusInvalid: function (secId) {
+			this.sectionDB[secId] = this.SECTION_STATUS_INVALID;
+		},
+		setStatusLoading: function (secId) {
+			this.sectionDB[secId] = this.SECTION_STATUS_LOADING;
+		},
+		// プリミティブすぎる
+		isExist: function (secId) {
+			return (secId in this.sectionDB);
+		},
+		getData: function (secId) {
+			return (secId in this.sectionDB) ? this.sectionDB[secId] : null;
+		},
+		WITH_OVERWRITE: true,
+		WITHOUT_OVERWRITE: false,
+		// これは完全データであることを保証する
+		registData: function (secId, secData, with_overwrite) {
+			//console.debug('registData: dump secData', secId, secData);
+			if (with_overwrite === undefined) {
+				with_overwrite = this.WITHOUT_OVERWRITE;
+			}
+			if (with_overwrite
+				|| !(secId in this.sectionDB) || !this.isRectionReady(secId)) {
+				this.sectionDB[secId] = secData;
+			}
+			return this.sectionDB[secId];
+		},
+		registIncompleteData: function (secId, secData, with_overwrite) {
+			//console.debug('dump secData', secData);
+			if (with_overwrite === undefined) {
+				with_overwrite = WITHOUT_OVERWRITE;
+			}
+			if (with_overwrite
+				|| !(secId in this.sectionDB) && this.sectionDB[secId] !== null) {
+				this.sectionDB[secId] = secData;
+				var sec = this.sectionDB[secId];
+				sec._maegaki = ('_maegaki' in sec) ? sec._maegaki : null;
+				sec._atogaki = ('_atogaki' in sec) ? sec._atogaki : null;
+				//
+				sec = splitContentsBody (sec, secId);
+				return sec;
+			}
+			return null;
+		},
+		getPageMap: function (secData, setting) {
+			return new PageMap(secData, setting);
+		},
+		////////////////////////////////////////////////////////
+		// 文章領域のページ数を計算する
+		// 一部で有無checkを_maegakiのraw側でしている部分もあったが
+		countPages: function (secData, setting) {
+			//console.debug('countPages: dump secData', secData);
+			var nPages = secData.honbun[0].length;
+			if (secData.maegaki !== null && setting.fMaegaki) {
+				nPages += secData.maegaki[0].length;
+			}
+			if (secData.atogaki !== null && setting.fAtogaki) {
+				nPages += secData.atogaki[0].length;
+			}
+			return nPages;
+		},
+		// 指定section範囲のページ数を計算
+		countSectionPages: function (beginSection, endSection, setting) {
+			beginSection = (beginSection === undefined) ? 1 : beginSection;
+			endSection   = (endSection   === undefined) ? this.length : endSection;
+			var nPages = 0;
+			for (var i = beginSection; i < endSection; ++i) {
+				if (!(i in this.sectionDB) || this.sectionDB[i] === false) {
+					return null;
+				}
+				var n = this.countPages(this.getData(i), setting);
+				// キャンバス内ページ数可変対応済
+				nPages += gCurrentManager.getPagesAlinedCanvas(n);
+			}
+			return nPages;
+		},
+
+		// $.each()ではthisでもvalueにアクセスできるが
+		// thisは単純な値でもobject化するので注意
+		each: function (fn) {
+			$.each(this.sectionDB, fn);
+		},
+		rangedEach: function (min, max, fn) {
+			for (var i = min; i <= max; ++i) {
+				if (i in this.sectionDB && this.sectionDB[i] !== false
+					&& this.sectionDB[i] !== null) {
+					if (!fn (i, this.sectionDB[i])) {
+						break;
+					}
+				}
+			}
+		},
+		length: function () {
+			return this.sectionDB.length;
+		},
+		// 用途によって、idがある(がnull)のminを探したい場合と
+		// 完全にデータがreadyのものを探したい場合があるかも？
+		minId: function () {
+			var secId;
+			for (secId = 1;
+				secId < this.sectionDB.length
+				&& (!(secId in this.sectionDB) || this.sectionDB[secId] === null);
+				++secId) {
+				// none
+			}
+			return secId;
+		},
+		// download形式の中身を作る
+		toHtmlDiv: function (secId, secData, prefix) {
+			var s = '<div id="' + prefix + 'section_' + secId + '">\n';
+			if (secData._maegaki) {
+				s += '<div class="' + prefix + 'maegaki">'
+					+ secData._maegaki.replace(reAllLineBreak, '') + '</div>\n';
+			}
+			if (secData.chapter_title !== '') {
+				s += '<div class="' + prefix + 'chapter_title">'
+					+ $('<div>').text(sectData.chapter_title).html() + '</div>\n';
+			}
+			s += '<div class="' + prefix + 'subtitle">'
+				+ $('<div>').text(secData.subtitle).html() + '</div>\n';
+			s += '<div class="' + prefix + 'honbun">'
+				+ secData._honbun.replace(reAllLineBreak, '') + '</div>\n';
+			if (secData._atogaki) {
+				s += '<div class="' + prefix + 'atogaki">'
+					+ secData._atogaki.replace(reAllLineBreak, '') + '</div>\n';
+			}
+			s += '</div>\n';
+			return s;
+		},
+		toDiv: function (secId, secData, prefix) {
+			var divRoot = $('<div id="' + prefix + 'section_' + secId + '">');
+			if (sec._maegaki !== null) {
+				divRoot.append('<div class="' + prefix + 'maegaki">'
+					+ sec._maegaki + '</div>');
+			}
+			if (sec.chapter_title !== '') {
+				divRoot.append('<div class="' + prefix + 'chapter_title">'
+					+ sec.chapter_title + '</div>');
+			}
+			divRoot.append('<div class="' + prefix + 'subtitle">'
+				+ sec.subtitle + '</div>');
+			divRoot.append('<div class="' + prefix + 'honbun">'
+				+ sec._honbun + '</div>');
+			if (sec._atogaki !== null) {
+				divRoot.append('<div class="' + prefix + 'atogaki">'
+					+ sec._atogaki + '</div>');
+			}
+			return divRoot;
+		},
+		restore: function (sourceSections, fn, with_overwrite) {
+			if (with_overwrite === undefined) {
+				with_overwrite = WITHOUT_OVERWRITE;
+			}
+			if (fn === undefined) {
+				fn = null;
+			} else if (fn === WITH_OVERWRITE || fn === WITHOUT_OVERWRITE) {
+				with_overwrite = fn;
+				fn = null;
+			}
+			$.each (sourceSections, function (secId, secData) {
+				var sec = gSectionManager.registInComplateData(secId, secData);
+				if (sec !== null && fn !== null) {
+					// thisが変わってしまうのでまずいかも？
+					if (!fn (sec, secId)) {
+						return false;
+					}
+				}
+				return true;
+			});
+		},
+
+		///////////////////////////////////////////
+		// 一部ではsec !== nullがないベタ展開コードがあったが問題ないので統合
+		// 一部でstart=1で呼び出している箇所があるが謎
+		//
+		// デフォルト引数はFirefox系じゃないとサポートしてない(ECMA Script 6の仕様内)
+		// http://kangax.github.io/es5-compat-table/es6/
+		// しょうがないからまだおとなしく普通にかいておく
+		//
+		reMake: function (beginId, endId) {
+			console.debug("remake pages called");
+			beginId = (beginId === undefined) ? 0 : beginId;
+			endId = (endId === undefined) ? this.sectionDB.length : endId;
+			for (var secId = beginId; secId < endId; ++secId) {
+				var secData = this.sectionDB[secId];
+				if (secId in this.sectionDB && secData !== false && secData !== null) {
+					console.debug("remake page:", secId);
+					console.debug("param lc:", gLinesPerCanvas, gCharsPerLine);
+					secData = splitContentsBody (secData, secId);
+				}
+			}
+		},
+		// loadコンテンツがらみなのでそのまま置き換えるべきか
+		// validateすべきか悩むところ
+		replaceDataBase: function (secDB) {
+			this.clear();
+			this.sectionDB = secDB;
+		},
+
+		// saveData形式を生成:dataが与えられなければcreate,そうでない場合はreplace
+		createSaveData: function (data, src_sections, startSecNo, endSecNo) {
+			src_sections = (src_sections === undefined) ? this.sectionDB : sec_sections;
+			startSecNo = (startSecNo === undefined) ? 1 : startSecNo;
+			endSecNo = (endSecNo === undefined) ? src_sections.length : endSecNo;
+			data = (data === undefined) ? {} : data;
+
+			if (gIndexManager.isIndexPageReady()) {
+				data.index = $('<div>')
+					.append(gSiteParser.selectNojaIndexData().clone())
+					.html();
+			}
+			// @@ 互換性のためtypoをそのまま残すか？
+			data.tanpen = gIndexManager.isIndexPageDisable();
+			data.generalAllNo = Math.max (gGeneralAllNo, data.generalAllNo);
+			data.title = gSiteParser.title;
+			data.color = gSiteParser.color;
+			data.bgColor = gSiteParser.bgColor;
+			data.auther = gSiteParser.author;
+			data.bgImage = gSiteParser.bgImage
+				? $(gSiteParser.bgImage).attr('src') : null;
+			//セクションデータ
+			for(var i = startSecNo; i < endSecNo.length; ++i) {
+				var sec = src_sections[i];
+				if (sec === null || (gSetting.oldData && i in data.sections)) {
+					continue;
+				}
+				data.sections[i] = {
+					chapter_title: sec.chapter_title,
+					subtitle: sec.subtitle,
+					_maegaki: sec._maegaki,
+					_atogaki: sec._atogaki,
+					_honbun: sec._honbun
+				};
+			}
+		},
+		// autoPagerize(secData, secId)は微妙にManagerが管理すべきか悩む
+	};
+
+	//////////////////////////////
+	var getDateTimeNow = function () {
+		var w2 = function (v) {
+			return (v < 10) ? '0' + v : '' + v;
+		};
+		var dt = new Date ();
+		var Y = dt.getFullYear ();
+		var M = w2 (dt.getMonth () + 1);
+		var D = w2 (dt.getDate ());
+		var h = w2 (dt.getHours ());
+		var m = w2 (dt.getMinutes ());
+		var s = w2 (dt.getSeconds ());
+		return '' + Y + '-' + M + '-' + D + ' ' + h + '-' + m + '-' + s;
+	};
 	//////////////////////////////////////////////////////////////////////
-	//読み込み中フラグ
-	var gLoading = 0;
 
 	//////////////////////////////////////////////////////////////////////
 	//設定
+	var WITH_SAVE = true;
+	var WITHOUT_SAVE = false;
+
 	var gSetting = {};
 	//var fncSave_ncode = function (setting) {
+	// 新規読み込み時等で値が未定義の場合もありそれを修正
+	var getSettingDefault = function () {
+		return {
+			ncode: null,
+			fMaegaki: true,	// 前書き表示
+			fAtogaki:true,	// 後書き表示
+			kaigyou: false,	// 改行詰め
+			// autoSave:,
+			// autoRestore:,
+			// oldData:,
+		};
+	};
+	var createSettingNew = function (ncode) {
+		return $.extend(getSettingDefault (), {ncode: ncode});
+	};
+	// instance method化する
+	var validateSetting = function (setting) {
+		setting = (setting === undefined) ? gSetting : setting;
+		setting.autoSave    = (setting.autoSave === true);
+		setting.autoRestore = (setting.autoRestore === true);
+		setting.oldData     = (setting.oldData === true);
+	};
+	// まとめて
+	var setSetting = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gSetting = value;
+		if (with_save) {
+			fncSave_ncode (gSetting);
+		}
+	};
+	var setSettingKaigyou = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gSetting.kaigyou = value;
+		if (with_save) {
+			fncSave_ncode (gSetting);
+		}
+	};
+	var setSettingFMaegaki = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gSetting.fMaegaki = value;
+		if (with_save) {
+			fncSave_ncode (gSetting);
+		}
+	};
+	var setSettingFAtogaki = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gSetting.fAtogaki = value;
+		if (with_save) {
+			fncSave_ncode (gSetting);
+		}
+	};
+
+	var setSettingAutoSave = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gSetting.autoSave = value;
+		if (with_save) {
+			fncSave_ncode (gSetting);
+		}
+	};
+	var setSettingAutoRestore = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gSetting.autoRestore = value;
+		if (with_save) {
+			fncSave_ncode (gSetting);
+		}
+	};
+	var setSettingOldData = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gSetting.oldData = value;
+		if (with_save) {
+			fncSave_ncode (gSetting);
+		}
+	};
 
 	//////////// 保存される設定
+
 	//フォントタイプ(FONTTYPE_MINCHO | FONTTYPE_GOTHIC)
 	var gFontType;
 	//前書き、後書きのレイアウト（枠線を付けるか否か）
 	var gLayout;	//
+	// そのうちsetter or watcherに変更する
+	var setGlobalLayout = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gLayout = value;
+		if (with_save) {
+			fncSave_global ('layout', gLayout);
+		}
+	};
 	//ページ読み込み直後に開くかどうか
 	var gAlwaysOpen;	//
+	var setGlobalAlwaysOpen = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gAlwaysOpen = value;
+		if (with_save) {
+			fncSave_global ('alwaysOpen', gAlwaysOpen);
+		}
+	};
 	//累計ページ数を表示するかどうか
 	var gAllpage;	//
+	var setGlobalAllpage = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gAllpage = value;
+		if (with_save) {
+			fncSave_global ('allpage', gAllpage);
+		}
+	};
 
 	//文字サイズ設定スライドバーの位置
 	var gSlidePos;
+	var setGlobalSlidePos = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gSlidePos = value;
+		if (with_save) {
+			fncSave_global ('slidePos', gSlidePos);
+		}
+	};
 	//縦書リーダーなのに横書で読みたいという酔狂な人のために
 	var gYokogaki = true;
-
+	var setGlobalYokogaki = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gYokogaki = value;
+		if (with_save) {
+			fncSave_global ('yokogaki', gYokogaki);
+		}
+	};
 
 
 
@@ -286,15 +945,21 @@ $(document).ready(function(){
 			;
 	};
 
-	var setFontType = function (font_type, save) {
+	var setGlobalFontType = function (font_type, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
 		gFontType = font_type;
-		if (save) {
+		if (with_save) {
 			fncSave_global ('fontType', gFontType);
 		}
 	};
 
 
-
+	// 元ページに張り付けるのジャーラベルのデフォルト文字列
+	var getNojaLabel = function () {
+		return '<a id="noja_open" style="cursor:pointer;font-size:'
+			+ FONTSMALL
+			+ '; display:block; margin-top:10px;">のじゃー縦書リーダー</a>';
+	};
 
 
 	//////////////////////////////////////////////////////////////////////
@@ -353,6 +1018,14 @@ $(document).ready(function(){
 	//////////////////////////////////////////////////////////////////////
 	var gSiteParser;
 
+	// jumpToにbindした場合は
+	// jumpTo内でもJumpTo.LAST_PAGE_NO
+	// としないといけない
+	// gJumpController.jumpToにして
+	// gJumpController.FIRST_SECTION_NO
+	// としておけば、this.FIRST_SECTION_NOでいい
+	// 関数呼び出しかメソッド呼出しかの違いだが…
+	// 使う側からすればどれも似たような感じ
 	var CURRENT_SECTION_NO_WITH_RELOAD = -1;
 	var FIRST_SECTION_NO = 1;
 	var FIRST_PAGE_NO = 0;
@@ -361,6 +1034,18 @@ $(document).ready(function(){
 	//////////////////////////////////////////////////////////////////////
 	//こっから関数の実体定義
 	valid = function (x) { return typeof x !== 'undefined'; };
+
+	function MinMaxRecorder() {
+		this.min = 0x7fffffff;
+		this.max = 0;
+	}
+	MinMaxRecorder.prototype = {
+		update: function (value) {
+			this.min = Math.min (this.min, value);
+			this.max = Math.max (this.max, value);
+			return this;
+		},
+	};
 
 	var getObj = function (selector, ctx, default_value) {
 		default_value = (default_value === undefined) ? null : default_value;
@@ -379,7 +1064,118 @@ $(document).ready(function(){
 	};
 
 
+	/////////////////////////////////////////////////////////////////
+	// ダウンロード関連のDOM管理等
+	var downloadFileManager = {
+		replaceAll: function (downloadFileMain) {
+			$('#noja').empty().append(downloadFileMain);
+		},
+		margeSections: function (new_section, notifyFn) {
+			if (notifyFn === undefined) {
+				notifyFn = null;
+			}
+			var prev = null;
+			for (var sec_no = 1; sec_no < new_sections.length; ++sec_no) {
+				var sec_id = 'noja_download_section_' + sec_no;
+				var existInDest = gSectionManager.isExist(sec_no);
+				if (sec_no in new_sections) {
+					var sec = new_sections[sec_no];
+					var itemDiv = gSectionManager.toDiv (sec_no, sec, 'noja_download_');
+					if (existInDest) {
+						prev = $('#' + sec_id).replaceWith(itemDiv);
+					} else {
+						// DOM側にはないはずの新規
+						var oldItem = $('#' + sec_id);
+						if (oldItem.size()) {
+							console.debug('DOMにないはずのitemがあった', sec_id);
+							oldItem.remove();
+						}
+						if (prev === null) {
+							$('#noja_download_file_main')
+								.prepend(itemDiv);
+						} else {
+							prev = prev.after(itemDiv);
+						}
+					}
+					prev = $('#' + sec_id);
+					if (notifyFn !== null) {
+						notifyFn (sec_no, sec);
+					}
+				} else if (existInDest) {
+					// 既存でnew側にはない番号の場合はprev更新だけ
+					prev = $('#' + sec_id);
+				}
+			}
+		},
+		setColorTheme: function (colorInfo) {
+			$('#noja_download_file_main').css({
+				color: colorInfo.color,
+				backgroundColor: colorInfo.bgColor
+			});
+			if (colorInfo.bgImage) {
+				$('#noja_download_file_main')
+					.css('background-image'
+						, 'url(' + colorInfo.bgImage + ')');
+			}
+		},
+		resetColorTheme: function () {
+			$('#noja_download_file_main').css({
+				color: '',
+				backgroundColor: '',
+				backgroundImage:''
+			});
+		},
+		// このあたりは通常のコンテンツ読み込み時の処理と共通化できる
+		parseColorTheme: function (info, infoRoot) {
+			info.color = infoRoot.css('color');
+			info.bgColor = infoRoot.css('background-color');
+			info.bgImage = infoRoot.css('background-image');
+			if (info.bgImage === null
+				|| info.bgImage === 'none'
+				|| info.bgImage === '') {
+				info.bgImage = null;
+			} else {
+				var url = info.bgImage.match(/url\(([^\)]*)\)/)[1];
+				info.bgImage = $('<img>')
+					.attr('src', url)
+					.bind('load', function() {showPage();})
+					.get(0);
+				info.bgColor = '#FFFFFF';
+			}
+			return info;
+		},
 
+		// dataRoot直下のdivから各download_sectionを取り出す
+		// 取り込みだけでsplitするのは凶悪なので呼出し側に任せる
+		toDataAll: function (dest_sections, dataRoot, prefix, fn) {
+			prefix = (prefix === undefined) ? '' : prefix;
+			fn = (fn === undefined) ? null : fn;
+			min_max_sec_no = new MinMaxRecorder();
+			dataRoot.children('div').each(function () {
+				var secId = parseInt(
+					$(this).attr('id').substr(prefix + 'section_'.length)
+				);
+				min_max_sec_no.update(secId);
+				var sec = {};
+				sec.chapter_title = getText('.' + prefix + 'chapter_title', this);
+				//
+				sec.subtitle = getText('.' + prefix + 'subtitle', this);
+				//
+				sec._maegaki = getHtml('.' + prefix + 'maegaki', this);
+				sec._atogaki = getHtml('.' + prefix + 'atogaki', this);
+				sec._honbun = getHtml('.' + prefix + 'honbun', this);
+				if (fn !== null) {
+					if (!fn(sec, secId)) {
+						return false;
+					}
+				}
+				dest_sections[secId] = sec;
+				return true;
+			});
+			return min_sec_no;
+		},
+	};
+	/////////////////////////////////////////////////////////////////
 	// 変数props検索&関数callの基本コスト分だけオーバーヘッドがあるが
 	// コード内で文字列が飛び交うのは好みではないので…
 	// (それでなくても文字列だらけになるものだし)
@@ -630,6 +1426,29 @@ $(document).ready(function(){
 
 
 	//////////////////////////////////////////////////////////////////////
+	// これはmixinにする
+	var setupFormRadiobox = function (form_selector) {
+		var total_no = 0;
+		$(form_selector).find('.RadioboxBigOrb a').each(function() {
+			var selector = form_selector;
+			var no = ((total_no++) % 5) + 1;
+			var handler = function () {
+				var group_name = $(this).attr('name');
+				var input_id = '#noja_' + group_name + no;
+				$(selector).find('.RadioboxBigOrb a[name="' + group_name + '"]')
+					.removeClass('RadioboxCheckedBigOrb')
+					.addClass('RadioboxUncheckedBigOrb');
+				$(this).addClass('RadioboxCheckedBigOrb')
+					.removeClass('RadioboxUncheckedBigOrb');
+				// 外側のspanをclickした時、内側に置いてるinputのcheckを変える
+				$(input_id).prop('checked', true);
+			};
+			// ここのthisはeachの見つかったanchorを指す
+			$(this).bind('click', handler).bind('press', handler);
+		});
+	};
+
+	//////////////////////////////////////////////////////////////////////
 	//ncode.syosetu.com(なろう)かnovel18.syosetu.com(のくむん)
 	//またはダミーでnaroufav.wkeya.com(配布サイト)
 	//var site;
@@ -664,10 +1483,10 @@ $(document).ready(function(){
 		this.ncode2 = null;
 		this.author = null;
 		this.title = null;
+		this.alwaysOpenDefault = true;
 
 		//
-		gCurrentSection.id = 1;
-		gCurrentSection.page = 0;
+		setCurrent.setCurrent (-1);
 		this.site = 'http://naroufav.wkeya.com/noja/';
 		this.site2 = 'http://naroufav.wkeya.com/noja/';
 		this.api = '';
@@ -680,35 +1499,57 @@ $(document).ready(function(){
 	AppModeSite.isSupportedURL = function (url) {
 		return (url === 'chrome://noja/content/app/index.html');
 	};
-	AppModeSite.prototype.getNovelBaseURL = function (novel_code) {
-		return this.site + this.ncode + '/';
+
+	// ajaxでページを読み込む
+	// Deferred objectを返す
+	AppModeSite.prototype.getNovelSection = function (section) {
+		if (!gNetworkManager.get()) {
+			return $.Deferred().reject().promise();
+		}
+		return $.get(this.getNovelSectionURL (section))
+		.always(function () {
+			gNetworkManager.release();
+		});
 	};
-	AppModeSite.prototype.getNovelIndexURL = function (novel_code) {
-		return this.site + this.ncode + '/';
-	};
+	// これは上で使われる
 	AppModeSite.prototype.getNovelSectionURL = function (section) {
 		return this.site + this.ncode + '/' + section + '/';
 	};
+
+	/////////////// 後は全部class内部でframe構築等で使っているもの
+	// Twitterリンク用→未使用予定
+	AppModeSite.prototype.getNovelBaseURL = function (novel_code) {
+		return this.site + this.ncode + '/';
+	};
+	// 未使用
+	AppModeSite.prototype.getNovelIndexURL = function (novel_code) {
+		return this.site + this.ncode + '/';
+	};
+	// 未使用
 	// '{{:site2}}novelpoint/register/ncode/{{:ncode2}}/'
 	AppModeSite.prototype.getNovelPointRegisterURL = function () {
 		return this.site2 + 'novelpoint/register/ncode/' + this.ncode2 + '/';
 	};
+	// 未使用
 	// '{{:site2}}impression/confirm/ncode/{{:ncode2}}/'
 	AppModeSite.prototype.getImpressionConfirmURL = function () {
 		return this.site2 + 'impression/confirm/ncode/' + this.ncode2 + '/';
 	};
-
+	// 未使用
 	// '{{:site2}}impression/list/ncode/{{:ncode2}}/'
 	AppModeSite.prototype.getImpressionListURL = function () {
 		return this.site2 + 'impression/list/ncode/' + this.ncode2 + '/';
 	};
+	// 未使用
 	// '{{:site2}}novelreview/list/ncode/{{:ncode2}}/'
 	AppModeSite.prototype.getNovelReviewListURL = function () {
 		return this.site2 + 'novelreview/list/ncode/' + this.ncode2 + '/';
 	};
+	// 未使用
 	AppModeSite.prototype.getNovelReviewConfirmURL = function () {
 		return this.site2 + 'novelreview/confirm/ncode/' + this.ncode2 + '/';
 	};
+	// 未使用
 	AppModeSite.prototype.getNovelViewInfotopURL = function () {
 		return this.site + 'novelview/infotop/ncode/' + this.ncode + '/';
 	};
@@ -767,27 +1608,6 @@ $(document).ready(function(){
 		form.children('div:eq(0)').children('div:eq(0)').before('※ダミーです');
 	};
 
-	// これはmixinにする
-	var setupFormRadiobox = function (form_selector) {
-		var total_no = 0;
-		$(form_selector).find('.RadioboxBigOrb a').each(function() {
-			var selector = form_selector;
-			var no = ((total_no++) % 5) + 1;
-			var handler = function () {
-				var group_name = $(this).attr('name');
-				var input_id = '#noja_' + group_name + no;
-				$(selector).find('.RadioboxBigOrb a[name="' + group_name + '"]')
-					.removeClass('RadioboxCheckedBigOrb')
-					.addClass('RadioboxUncheckedBigOrb');
-				$(this).addClass('RadioboxCheckedBigOrb')
-					.removeClass('RadioboxUncheckedBigOrb');
-				// 外側のspanをclickした時、内側に置いてるinputのcheckを変える
-				$(input_id).prop('checked', true);
-			};
-			// ここのthisはeachの見つかったanchorを指す
-			$(this).bind('click', handler).bind('press', handler);
-		});
-	};
 
 
 	// 評価formの構築
@@ -813,6 +1633,81 @@ $(document).ready(function(){
 		return $(' #noja_index .novel_title, #noja_index .novel_writername, #noja_index #novel_ex, #noja_index .index_box');
 	};
 
+
+	// 多分抜き出しても大丈夫だと思うが変数束縛はチェックしていない
+	// 初期化段階でのメニューカスタマイズ
+	AppModeSite.prototype.customizeMenu = function () {
+		$('#noja_link')
+			.empty()
+			.append(
+				$('<div style="text-align:right; border-bottom-width:1px; border-bottom-style:solid;">'
+				+ '<a id="noja_closelink">[閉じる]</a>'
+				+ '</div>'
+				).bind('click', function() { $('#noja_link').hide(); })
+			);
+		$('#noja_import_container')
+			.html('<h4>読み込み</h4>'
+			+ '<div id="noja_file_back">'
+			+ '<input id="noja_file" type="file" value="" accept="text/html, application/zip" multiple="true" >'
+			+ '</div>'
+			+ '<br /><br />'
+			+ '<a id="noja_yomikomi">保存・読み込み機能について</a>'
+			);
+		$('#noja_saveload_container')
+			.append('<br /><a id="noja_booklist">保存した小説リスト</a>');
+		$('#noja_version')
+			.append('<br /><br /><a id="noja_kokuhaku">関係のない話</a>');
+		$('#noja_booklist').bind('click', function() {
+			buildAndShowBookList();
+		});
+		$('#noja_file').bind('change', app_fileLoadHandler());
+		//
+		var app_builtin_content_load_handler = function (res) {
+			nojaImport(fncLsc (res)).then(
+				function() {
+					jumpTo ((gCurrentManager.id == FIRST_SECTION_NO)
+						? CURRENT_SECTION_NO_WITH_RELOAD
+						: FIRST_SECTION_NO
+						, FIRST_PAGE_NO);
+				}
+				// format mismatchでエラーが出ることはあるが無視
+			);
+		};
+		$('#noja_yomikomi').bind('click', function(){
+			app_builtin_content_load_handler (noja_option.app_yomikomi_setumei);
+		});
+		$('#noja_kokuhaku').bind('click', function(){
+			app_builtin_content_load_handler (noja_option.app_kokuhaku);
+		});
+	};
+
+	// Deferred interface
+	AppModeSite.prototype.importInitialContents = function () {
+		return nojaImport (fncLsc (noja_option.app_setumei));
+	};
+
+	// 「のじゃー」ラベルを元ページに貼り付け
+	AppModeSite.prototype.attachNoja = function () {
+		// AppModeだと不要のはず？
+		$('#novelnavi_right').append(getNojaLabel());
+	};
+
+	AppModeSite.prototype.replaceImageURL = function (url) {
+		return url;
+	};
+
+	AppModeSite.prototype.getNextSection = function (secId) {
+		return ++secId;
+	};
+
+	AppModeSite.prototype.getPrevSection = function (secId) {
+		return --secId;
+	};
+
+
+
+
+
 	//////////////////////////////////////////////////////////////////
 	function NarouSite(url) {
 		this.siteName = NarouSite.siteName;
@@ -828,17 +1723,29 @@ $(document).ready(function(){
 		this.ncode2 = null;
 		this.author = null;
 		this.title = null;
+		this.alwaysOpenDefault = false;
 
 		//ctorで外部変数を更新するのもナニだがとりあえずそのまま
 		this.api   = 'http://api.syosetu.com/novelapi/api/';
 		this.site  = 'http://ncode.syosetu.com/';
-		this.site0 = 'http://syosetu.com';	//
+		this.site0 = 'http://syosetu.com/';	//
 		this.site2 = 'http://novelcom.syosetu.com/';
-		url.match(/http:\/\/ncode.syosetu.com\/([nN][^\/]*)\/([0-9]*)/);
-		this.ncode = RegExp.$1.toLowerCase();
-		// 短編のときは$2が空になるはず(=0)
-		gCurrentSection.id = parseInt(RegExp.$2);
+		this.siteS = 'http://static.syosetu.com/';
+		var m = NarouSite.reURL.exec(url);
+		if (m) {
+			this.ncode = m[1].toLowerCase();
+			// 短編のときはm[2]が空になるはず(=0)
+			var secNo = parseInt(m[2]);
+			if (secNo === null || secNo === 0) {
+				gCurrentManager.setSingleSection ();
+			} else {
+				gCurrentManager.setCurrent (secNo);
+			}
+		} else {
+			console.debug('!m:', m);
+		}
 	}
+	NarouSite.reURL = /http:\/\/ncode.syosetu.com\/([nN][^\/]*)\/([0-9]*)/;
 	// なろう系の場合は短編の場合、
 	// 作品topページ=コンテンツページなので、
 	// コンテンツページに限定することはできない
@@ -848,7 +1755,23 @@ $(document).ready(function(){
 			/http:\/\/ncode\.syosetu\.com\/[nN]/
 		) === 0);
 	};
+	// ajaxでページを読み込む
+	// Deferred objectを返す
+	NarouSite.prototype.getNovelSection = function (section) {
+		if (!gNetworkManager.get()) {
+			return $.Deferred().reject().promise();
+		}
+		return $.get(gSiteParser.getNovelSectionURL (section))
+		.always(function () {
+			gNetworkManager.release();
+		});
+	};
+	// これは上で使われる
+	NarouSite.prototype.getNovelSectionURL = function (section) {
+		return this.site + this.ncode + '/' + section + '/';
+	};
 
+	/////////////// 後は全部class内部でframe構築等で使っているもの
 	// その作品のtopページ
 	NarouSite.prototype.getNovelBaseURL = function (novel_code) {
 		return this.site + this.ncode + '/';
@@ -857,17 +1780,14 @@ $(document).ready(function(){
 	NarouSite.prototype.getNovelIndexURL = function (novel_code) {
 		return this.site + this.ncode + '/';
 	};
-	NarouSite.prototype.getNovelSectionURL = function (section) {
-		return this.site + this.ncode + '/' + section + '/';
-	};
 	NarouSite.prototype.getLoginURL = function () {
-		return 'http://syosetu.com/login/input/';
+		return this.site0 + 'login/input/';
 	};
 	NarouSite.prototype.getUserTopURL = function () {
-		return 'http://syosetu.com/user/top/';
+		return this.site0 + 'user/top/';
 	};
 	NarouSite.prototype.getBookmarkImageURL = function () {
-		return 'http://static.syosetu.com/view/images/bookmarker.gif';
+		return this.siteS + 'view/images/bookmarker.gif';
 	};
 
 	NarouSite.prototype.getLoginOrUserTopURL = function () {
@@ -931,12 +1851,12 @@ $(document).ready(function(){
 		, 'http://syosetu.com/bookmarker/add/ncode/{{:ncode2}}/no/{{:section_no}}/?token={{:token}}');
 
 	NarouSite.prototype.getShioriPrefixURL = function() {
-		return 'http://syosetu.com/bookmarker/add/ncode/';
+		return this.site0 + 'bookmarker/add/ncode/';
 	};
 
 
 	NarouSite.prototype.getShioriURL = function(section_no) {
-		section_no = (section_no === undefined) ? gCurrentSection.id : section_no;
+		section_no = (section_no === undefined) ? gCurrentManager.id : section_no;
 		return $.render.narouShioriURLTmpl({
 			ncode2: this.ncode2,
 			section_no: section_no,
@@ -1178,7 +2098,7 @@ $(document).ready(function(){
 			this.author = $('<div>')
 				.html(
 					$('.contents1', contents).html()
-					.replace(/\r|\n/g, '')
+					.replace(reAllLineBreak, '')
 					.match(/作者：(.*)(<p.*?<\/p>)?/)[1]
 				)
 				.text();
@@ -1214,15 +2134,7 @@ $(document).ready(function(){
 
 		// 短編かどうかの判断はtitleが取れたかどうかで行う
 		// title関連の調整とtoken取得等
-		if (this.isSingleSection) {
-			// 短編
-			setIndexPageDisabled ();
-			gCurrentSection.id = 1;
-			gGeneralAllNo = 1;
-		} else {
-			// 連載
-			setIndexPageNotReady();
-		}
+		gCurrentManager.setSingleSection (this.isSingleSection);
 		// なろうの場合は短編と連載でトークンの取る位置が違う？
 		var t;
 		if (this.isSingleSection) {
@@ -1258,7 +2170,7 @@ $(document).ready(function(){
 		sec._atogaki = getHtml('#novel_a', contents);
 		sec._honbun = getHtml('#novel_honbun', contents);
 
-		sec = splitContentsBody (sec, gCurrentSection.id);
+		sec = splitContentsBody (sec, gCurrentManager.id);
 
 		return sec;
 	};
@@ -1276,9 +2188,13 @@ $(document).ready(function(){
 		this.updateTitleAtSection (contents);
 
 		//
-		sections[gCurrentSection.id] = this.parseHtmlCommon (contents, gCurrentSection.id);
+		gSectionManager.registData (gCurrentManager.id
+			, this.parseHtmlCommon (contents, gCurrentManager.id));
 		//
-		setupCurrentSectionInfo(gCurrentSection.id);
+		gCurrentManager.setCurrent (gCurrentManager.id);
+		// autoPagerが貼り付ける先に独自attrを付ける
+		$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a')
+			.attr('data-noja', gCurrentManager.id);
 		return true;
 	};
 
@@ -1302,8 +2218,13 @@ $(document).ready(function(){
 
 	///////////////////////////////////////////
 	NarouSite.prototype.loadIndex = function () {
-		var dfrd = new $.Deffered();
-		$.get(this.getNovelIndexURL()).then(
+		var dfrd = new $.Deferred();
+		if (!gNetworkManager.get()) {
+			return dfrd.reject().promise();
+		}
+		$.get(this.getNovelIndexURL()).always(function () {
+			gNetworkManager.release();
+		}).then(
 			//success:
 			function(data) {
 				var index = $('.novel_title, .novel_writername, #novel_ex, .index_box'
@@ -1354,10 +2275,16 @@ $(document).ready(function(){
 	//ajaxでなろう小説APIからデータを受け取る
 	// データタイプはjsonなのでdecodeされてdataのpropになっている?
 	// どうせjsonであることに依存しているのだから
-	// getJSONにする(deffered対応でfailも処理できるし)
+	// getJSONにする(Deferred対応でfailも処理できるし)
 	NarouSite.prototype.loadMaxSectionNo = function () {
-		var dfrd = new $.Deffered();
-		$.getJSON (gSiteParser.api + NAROUAPI_AJAX_GET_OPT + this.ncode)
+		var dfrd = new $.Deferred();
+		if (!gNetworkManager.get()) {
+			return $.Deferred().reject().promise();
+		}
+		$.getJSON (this.api + NAROUAPI_AJAX_GET_OPT + this.ncode)
+		.always(function () {
+			gNetworkManager.release();
+		})
 		.then(
 			// success: 成功
 			function (data) {
@@ -1371,7 +2298,9 @@ $(document).ready(function(){
 		);
 		return dfrd.promise ();
 	};
+
 	NarouSite.prototype.startAsyncProcess = function () {
+		// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
 	};
 
 	// 目次ページを作ったときのtag要素に依存するデータ構造
@@ -1379,6 +2308,44 @@ $(document).ready(function(){
 	NarouSite.prototype.selectNojaIndexData = function () {
 		return $(' #noja_index .novel_title, #noja_index .novel_writername, #noja_index #novel_ex, #noja_index .index_box');
 	};
+
+	NarouSite.prototype.customizeMenu = function () {
+		// 初期化段階でのメニューカスタマイズ
+	};
+
+	// Deferred interface
+	NarouSite.prototype.importInitialContents = function () {
+		// なにもないのでresolveしたDeferredのpromiseを返す
+		return new $.Deferred().resolve().promise();
+	};
+
+	// 「のじゃー」ラベルを元ページに貼り付け
+	// 位置が悪い？
+	// $('#head_nav')
+	//	.append('<li><a id="noja_open" class="menu">のじゃー縦書リーダー</a></li>');
+	NarouSite.prototype.attachNoja = function () {
+		$('#novelnavi_right').append(getNojaLabel());
+	};
+
+	NarouSite.prototype.replaceImageURL = function (url) {
+		// 画像src(@みてみん)のリンクを修正
+		// これはなろう固有の話
+		return  url.replace('viewimagebig', 'viewimage');
+	};
+
+	NarouSite.prototype.getNextSection = function (secId) {
+		return ++secId;
+	};
+
+	NarouSite.prototype.getPrevSection = function (secId) {
+		return --secId;
+	};
+
+
+
+
+
+
 
 	///////////////////////////////////////////////////
 	function NocMoonSite(url) {
@@ -1395,18 +2362,29 @@ $(document).ready(function(){
 		this.ncode2 = null;
 		this.author = null;
 		this.title = null;
+		this.alwaysOpenDefault = false;
 
 		//ctorで外部変数を更新するのもナニだがとりあえずそのまま
 		this.api   = 'http://api.syosetu.com/novel18api/api/';
 		this.site  = 'http://novel18.syosetu.com/';
 		this.site2 = 'http://novelcom18.syosetu.com/';
-		this.site0 = 'http://syosetu.com';	// 共通で使ってる場所がある？
-		url.match(/http:\/\/novel18.syosetu.com\/([nN][^\/]*)\/([0-9]*)/);
-		this.ncode = RegExp.$1.toLowerCase();
-		// 短編のときは$2が空になるはず(=0)
-		gCurrentSection.id = parseInt(RegExp.$2);
-
+		this.site0 = 'http://syosetu.com/';	// 共通で使ってる場所がある？
+		this.siteS = 'http://static.syosetu.com/';
+		var m = NocMoonSite.reURL.exec (url);
+		if (m) {
+			this.ncode = m[1].toLowerCase();
+			// 短編のときはm[2]が空になるはず(=0)
+			var secNo = parseInt(m[2]);
+			if (secNo === null || secNo === 0) {
+				gCurrentManager.setSingleSection ();
+			} else {
+				gCurrentManager.setCurrent (secNo);
+			}
+		} else {
+			console.debug('!m:', m);
+		}
 	}
+	NocMoonSite.reURL = /http:\/\/novel18.syosetu.com\/([nN][^\/]*)\/([0-9]*)/;
 	// なろう系の場合は短編の場合、
 	// 作品topページ=コンテンツページなので、
 	// コンテンツページに限定することはできない
@@ -1416,6 +2394,23 @@ $(document).ready(function(){
 			/http:\/\/novel18\.syosetu\.com\/n/
 		) === 0);
 	};
+	// ajaxでページを読み込む
+	// Deferred objectを返す
+	NocMoonSite.prototype.getNovelSection = function (section) {
+		if (!gNetworkManager.get()) {
+			return $.Deferred().reject().promise();
+		}
+		return $.get(gSiteParser.getNovelSectionURL (section))
+		.always(function () {
+			gNetworkManager.release();
+		});
+	};
+	// これは上で使われる
+	NocMoonSite.prototype.getNovelSectionURL = function (section) {
+		return this.site + this.ncode + '/' + section + '/';
+	};
+
+	/////////////// 後は全部class内部でframe構築等で使っているもの
 	// その作品のtopページ
 	NocMoonSite.prototype.getNovelBaseURL = function (novel_code) {
 		return this.site + this.ncode + '/';
@@ -1424,18 +2419,15 @@ $(document).ready(function(){
 	NocMoonSite.prototype.getNovelIndexURL = function (novel_code) {
 		return this.site + this.ncode + '/';
 	};
-	NocMoonSite.prototype.getNovelSectionURL = function (section) {
-		return this.site + this.ncode + '/' + section + '/';
-	};
 	NocMoonSite.prototype.getLoginURL = function () {
-		return 'http://syosetu.com/login/input/';
+		return this.site0 + 'login/input/';
 	};
 
 	NocMoonSite.prototype.getUserTopURL = function () {
-		return 'http://syosetu.com/user/top/';
+		return this.site0 + 'user/top/';
 	};
 	NocMoonSite.prototype.getBookmarkImageURL = function () {
-		return 'http://static.syosetu.com/view/images/bookmarker.gif';
+		return this.siteS + 'view/images/bookmarker.gif';
 	};
 
 	NocMoonSite.prototype.getLoginOrUserTopURL = function () {
@@ -1498,11 +2490,11 @@ $(document).ready(function(){
 	$.templates('nocMoonShioriURLTmpl'
 		, 'http://syosetu.com/bookmarker/add/ncode/{{:ncode2}}/no/{{:section_no}}/?token={{:token}}');
 	NocMoonSite.prototype.getShioriPrefixURL = function() {
-		return 'http://syosetu.com/bookmarker/add/ncode/';
+		return this.site0 + 'bookmarker/add/ncode/';
 	};
 
 	NocMoonSite.prototype.getShioriURL = function(section_no) {
-		section_no = (section_no === undefined) ? gCurrentSection.id : section_no;
+		section_no = (section_no === undefined) ? gCurrentManager.id : section_no;
 		return $.render.nocMoonShioriURLTmpl({
 			ncode2: this.ncode2,
 			section_no: section_no,
@@ -1510,7 +2502,7 @@ $(document).ready(function(){
 		});
 	};
 	NocMoonSite.prototype.getFavnovelmain18BaseURL = function () {
-		return 'http://syosetu.com/favnovelmain18/';
+		return this.site0 + 'favnovelmain18/';
 	};
 
 
@@ -1664,7 +2656,7 @@ $(document).ready(function(){
 			this.author = $('<div>')
 				.html(
 					$('.contents1', contents).html()
-					.replace(/\r|\n/g, '')
+					.replace(reAllLineBreak, '')
 					.match(/作者：(.*)(<p.*?<\/p>)?/)[1]
 				)
 				.text();
@@ -1685,11 +2677,11 @@ $(document).ready(function(){
 		}
 
 		//前書きデータ取得
-		sec._maegaki = getHtml('#novel_p', contents);
 		//後書きデータ取得
-		sec._atogaki = getHtml('#novel_a', contents);
 		//本文データ取得
-		sec._honbun = getHtml('#novel_honbun', contents);
+		sec._maegaki = getHtml('#novel_p', contents);
+		sec._atogaki = getHtml('#novel_a', contents);
+		sec._honbun  = getHtml('#novel_honbun', contents);
 
 		sec = splitContentsBody (sec, section);
 		// データオブジェクトを返す
@@ -1736,15 +2728,8 @@ $(document).ready(function(){
 
 		// 短編かどうかの判断はtitleが取れたかどうかで行う
 		// title関連の調整とtoken取得等
-		if (this.isSingleSection) {
-			// 短編
-			setIndexPageDisabled ();
-			gCurrentSection.id = 1;
-			gGeneralAllNo = 1;
-		} else {
-			// 連載
-			setIndexPageNotReady();
-		}
+
+		gCurrentManager.setSingleSection (this.isSingleSection);
 		var t = $('#bkm a[href^="' + this.getFavnovelmain18BaseURL() + '"]');
 		this.token = (t.size()) ? t.attr('href').match(/=([0-9a-f]*)$/)[1] : null;
 		if (this.token) {
@@ -1767,9 +2752,13 @@ $(document).ready(function(){
 		this.updateThemeAtSection (contents);
 		this.updateTitleAtSection (contents);
 		//
-		sections[gCurrentSection.id] = this.parseHtmlCommon(contents, gCurrentSection.id);
+		gSectionManager.registData (gCurrentManager.id
+			, this.parseHtmlCommon(contents, gCurrentManager.id));
 		//
-		setupCurrentSectionInfo(gCurrentSection.id);
+		gCurrentManager.setCurrent (gCurrentManager.id);
+		// autoPagerが貼り付ける先に独自attrを付ける
+		$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a')
+			.attr('data-noja', gCurrentManager.id);
 		return true;
 	};
 
@@ -1806,8 +2795,13 @@ $(document).ready(function(){
 	};
 
 	NocMoonSite.prototype.loadIndex = function () {
-		var dfrd = new $.Deffered();
-		$.get (this.getNovelIndexURL()).then(
+		var dfrd = new $.Deferred();
+		if (!gNetworkManager.get()) {
+			return dfrd.reject().promise();
+		}
+		$.get (this.getNovelIndexURL()).always(function() {
+			gNetworkManager.release();
+		}).then(
 			//success:
 			function(data) {
 				var indexDiv = indexFrame.$div ();
@@ -1860,8 +2854,14 @@ $(document).ready(function(){
 	// どうせデコードされていることが前提となるコードなので
 	// getJSONを呼び出してもいいはず
 	NocMoonSite.prototype.loadMaxSectionNo = function () {
-		var dfrd = new $.Deffered();
-		$.getJSON (gSiteParser.api + NAROUAPI_AJAX_GET_OPT + this.ncode)
+		var dfrd = new $.Deferred();
+		if (!gNetworkManager.get()) {
+			return $.Deferred().reject().promise();
+		}
+		$.getJSON (this.api + NAROUAPI_AJAX_GET_OPT + this.ncode)
+		.always(function () {
+			gNetworkManager.release();
+		})
 		.then(
 			// success: 成功
 			function (data) {
@@ -1877,6 +2877,7 @@ $(document).ready(function(){
 	};
 
 	NocMoonSite.prototype.startAsyncProcess = function () {
+		// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
 	};
 
 
@@ -1885,6 +2886,45 @@ $(document).ready(function(){
 	NocMoonSite.prototype.selectNojaIndexData = function () {
 		return $(' #noja_index .novel_title, #noja_index .novel_writername, #noja_index #novel_ex, #noja_index .index_box');
 	};
+
+	NocMoonSite.prototype.customizeMenu = function () {
+		// 初期化段階でのメニューカスタマイズ
+	};
+
+	// Deferred interface
+	NocMoonSite.prototype.importInitialContents = function () {
+		// なにもないのでresolveしたDeferredのpromiseを返す
+		return new $.Deferred().resolve().promise();
+	};
+
+	// 「のじゃー」ラベルを元ページに貼り付け
+	// 位置が悪い？
+	// $('#head_nav')
+	//	.append('<li><a id="noja_open" class="menu">のじゃー縦書リーダー</a></li>');
+	NocMoonSite.prototype.attachNoja = function () {
+		$('#novelnavi_right').append(getNojaLabel());
+	};
+
+	NocMoonSite.prototype.replaceImageURL = function (url) {
+		// 画像src(@みてみん)のリンクを修正
+		// これはなろう固有の話
+		return  url.replace('viewimagebig', 'viewimage');
+	};
+
+	NocMoonSite.prototype.getNextSection = function (secId) {
+		return ++secId;
+	};
+
+	NocMoonSite.prototype.getPrevSection = function (secId) {
+		return --secId;
+	};
+
+
+
+
+
+
+
 
 	/////////////////////////////////////////////////////////////////
 	function AkatsukiSite(url) {
@@ -1901,17 +2941,24 @@ $(document).ready(function(){
 		this.ncode2 = null;
 		this.author = null;
 		this.title = null;
+		this.alwaysOpenDefault = false;
 
 		//ctorで外部変数を更新するのもナニだがとりあえずそのまま
 		this.site = 'about:blank';
 		this.api = 'about:blank/';
 		this.site2 = 'about:blank/';
-		url.match(/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/(\d+)\/novel_id~(\d+)/);
-		//this.ncode = parseInt(RegExp.$2);	// 別に数値にする必然性はない
-		this.ncode = RegExp.$2;
-		// $1はsection id
-		gCurrentSection.id = null;	// mapがわからないと対応が取れない
-		this.currentSectionId = RegExp.$1;
+		var m = AkatsukiSite.reURL.exec (url);
+		if (m) {
+			// m[1]はsection id
+			this.currentSectionId = m[1];
+			this.ncode = m[2];
+			//this.ncode = parseInt(m[2]);	// 別に数値にする必然性はない
+
+			// map{id: secNo}がわからないと対応が取れないが
+			gCurrentManager.setCurrent (this.currentSectionId);
+		} else {
+			console.debug('!m:', m);
+		}
 		// 逆方向はjQueryの$.inArray(id, sectioNo2Id)でindexで取る
 		// どうせ初期ページがsectionどこにあたるのかを知るためだけ
 		this.sectionNo2Id = [];
@@ -1921,12 +2968,31 @@ $(document).ready(function(){
 		this.fetchIndexPage();
 
 	}
+	AkatsukiSite.reURL = /http:\/\/www\.akatsuki-novels\.com\/stories\/view\/(\d+)\/novel_id~(\d+)/;
 	AkatsukiSite.siteName = '暁';
 	AkatsukiSite.isSupportedURL = function (url) {
 		return (url.search(
 			/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/\d+\/novel_id~\d+/
 		) === 0);
 	};
+	// ajaxでページを読み込む
+	// Deferred objectを返す
+	AkatsukiSite.prototype.getNovelSection = function (section) {
+		if (!gNetworkManager.get()) {
+			return $.Deferred().reject().promise();
+		}
+		return $.get(gSiteParser.getNovelSectionURL (section))
+		.always(function () {
+			gNetworkManager.release();
+		});
+	};
+	// これは上で使われる
+	AkatsukiSite.prototype.getNovelSectionURL = function (section) {
+		return this.site + this.ncode + '/' + section + '/';
+	};
+
+	/////////////// 後は全部class内部でframe構築等で使っているもの
+
 	//http://www.akatsuki-novels.com/stories/index/novel_id~{ncode}
 	//http://www.akatsuki-novels.com/stories/index/page~{idx_pg}/novel_id~{ncode}
 	//現1ページ／全16ページ、20件／全306件、1～20件を表示 
@@ -1951,11 +3017,8 @@ $(document).ready(function(){
 		return 'http://www.akatsuki-novels.com/stories/index/page~'
 			+index_page_no+'/novel_id~'+novel_id;
 	};
-	AkatsukiSite.prototype.getNovelSectionURL = function (section) {
-		return this.site + this.ncode + '/' + section + '/';
-	};
 	AkatsukiSite.prototype.getShioriURL = function(section_no) {
-		section_no = (section_no === undefined) ? gCurrentSection.id : section_no;
+		section_no = (section_no === undefined) ? gCurrentManager.id : section_no;
 		return '';
 	};
 	AkatsukiSite.prototype.changeSection = function(section_no) {
@@ -1999,6 +3062,33 @@ $(document).ready(function(){
 	};
 
 	////////////////////////////////////////////////////////
+	//html body#novel div#wrapper div#container2 div#contents2 div#contents-inner2 div.box div.box div.paging_for_view
+	// これがページ移動 #contents-inner2を取ってくるので情報は取れる
+	// html body#novel div#wrapper div#container2 div#contents2 div#contents-inner2 div.box div.box div.paging_for_view span.next
+	// disableのときは disabledも付く
+	// html body#novel div#wrapper div#container2 div#contents2 div#contents-inner2 div.box div.box div.paging_for_view span.prev
+	// <div class="paging_for_view">
+	//<span class="prev disabled">< 前ページ</span>
+	//<span class="next">
+	//<a rel="next" href="/stories/view/79203/novel_id~6791">次ページ ></a>
+	//</span>
+	//an class="table_of_contents">
+	//<a rel="table_of_contents" href="/stories/index/novel_id~6791">目次</a>
+	//</span>
+	//</div>
+	//
+	//<div class="paging_for_view">
+	//<span class="prev">
+	//<a rel="prev" href="/stories/view/83476/novel_id~6791">< 前ページ</a>
+	//</span>
+	//<span class="next disabled">次ページ ></span>
+	//<span class="table_of_contents">
+	//<a rel="table_of_contents" href="/stories/index/novel_id~6791">目次</a>
+	//</span>
+	//</div>
+	// rel属性が論理的なrelationなのでそれを使う
+	// paging_for_viewは上下にあるので1つ目を使うべし
+
 	AkatsukiSite.prototype.parseHtmlCommon = function(story, novels, section) {
 		// divの中に"作者："があってその後にaがあるもの
 		this.author = $('div a:eq(0)', story).text();
@@ -2144,9 +3234,7 @@ $(document).ready(function(){
 			return false;
 		}
 		// [強制短編設定]
-		gCurrentSection.id = 1;
-		setIndexPageDisabled ();
-		gGeneralAllNo = 1;
+		gCurrentManager.setSingleSection ();
 		// その他
 		// 解析した中身によって本来変更すべきもの
 		this.login = false;
@@ -2158,9 +3246,15 @@ $(document).ready(function(){
 
 		// htmlの共通parserにかける前に
 		// 雀牌画像の逆変換をして独自タグに戻すべき
-		sections[gCurrentSection.id] = this.parseHtmlCommon (story, novels, gCurrentSection.id);
-		setupCurrentSectionInfo(gCurrentSection.id);
+		gSectionManager.registData (gCurrentManager.id
+			, this.parseHtmlCommon (story, novels, gCurrentManager.id));
+		gCurrentManager.setCurrent (gCurrentManager.id);
 
+		// autoPagerが貼り付ける先に独自attrを付ける
+		if (false) {
+			$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a')
+				.attr('data-noja', gCurrentManager.id);
+		}
 		return true;
 	};
 
@@ -2174,10 +3268,17 @@ $(document).ready(function(){
 	// pagingは常にlastのlinkがあるのでmax数は分かる
 	// (last pageは分かる)
 	// 
-	//
+	// html body#novel div#wrapper div#container2 div#contents2
+	//   div#contents-inner2 div.box
+	// とりあえずcontents-inner2の中に全部ある
 	AkatsukiSite.prototype.loadIndex = function () {
-		var dfrd = new $.Deffered();
-		$.get(this.getNovelIndexURL()).then(
+		var dfrd = new $.Deferred();
+		if (!gNetworkManager.get()) {
+			return dfrd.reject().promise();
+		}
+		$.get(this.getNovelIndexURL()).always(function () {
+			gNetworkManager.release();
+		}).then(
 			//success:
 			function(data) {
 				var indexDiv = indexFrame.$div ();
@@ -2222,10 +3323,10 @@ $(document).ready(function(){
 	// callbackの仕様が同一なのでそのままrelayするだけ?
 	// と思ったが折角loadIndexするのでready設定はすべき
 	AkatsukiSite.prototype.loadMaxSectionNo = function () {
-		var dfrd = new $.Deffered();
+		var dfrd = new $.Deferred();
 		this.loadIndex().then(
 			function (maxSectionNo) {
-				setIndexPageReady();
+				gIndexManager.setIndexPageReady();
 				dfrd.resolve (maxSectionNo);
 			},
 			function () {
@@ -2244,7 +3345,12 @@ $(document).ready(function(){
 				htmlDocList.forEach(function () {
 				});
 			};
-			$.get(url).done(function(data) {
+			if (!gNetworkManager.get()) {
+				return $.Deferred().reject().promise();
+			}
+			$.get(url).always(function () {
+				gNetworkManager.release();
+			}).then(function(data) {
 				// /html/body/div/div[2]/div/div/div[2]/div/div/div[2]
 				// #contents-inner2 div.box div.box div.body-x1 div.paging-top
 				// "#contents-inner2"はbody直下ではないので問題ないはず
@@ -2261,19 +3367,18 @@ $(document).ready(function(){
 				} else {
 					buildIndexMap([data]);
 				}
-			})
-			.fail(function() {
+			},
+			function() {
 				console.debug('fetch first index failed');
 				// どうしよう？
 			});
-			//always, then, $.when(a,b,...)
 		}
 	};
 
 
 	// 自動loadIndexさせないとid:secnoのmapが作れない
 	AkatsukiSite.prototype.startAsyncProcess = function () {
-		//
+		// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
 	};
 
 
@@ -2282,6 +3387,43 @@ $(document).ready(function(){
 	AkatsukiSite.prototype.selectNojaIndexData = function () {
 		return $(' #noja_index .novel_title, #noja_index .novel_writername, #noja_index #novel_ex, #noja_index .index_box');
 	};
+
+	AkatsukiSite.prototype.customizeMenu = function () {
+		// 初期化段階でのメニューカスタマイズ
+	};
+
+	// Deferred interface
+	AkatsukiSite.prototype.importInitialContents = function () {
+		// なにもないのでresolveしたDeferredのpromiseを返す
+		return new $.Deferred().resolve().promise();
+	};
+
+	// 「のじゃー」ラベルを元ページに貼り付け
+	AkatsukiSite.prototype.attachNoja = function () {
+		//$('#novelnavi_right').append(getNojaLabel());
+	};
+
+	AkatsukiSite.prototype.replaceImageURL = function (url) {
+		return  url;
+	};
+
+	// idが純粋にidなのでlinkから取る
+	AkatsukiSite.prototype.getNextSection = function (secId) {
+		return ++secId;
+	};
+
+	// idが純粋にidなのでlinkから取る
+	AkatsukiSite.prototype.getPrevSection = function (secId) {
+		return --secId;
+	};
+
+
+
+
+
+
+
+
 
 	////////////////////////////////////////////
 	function HamelnSite(url) {
@@ -2298,6 +3440,7 @@ $(document).ready(function(){
 		this.ncode2 = null;
 		this.author = null;
 		this.title = null;
+		this.alwaysOpenDefault = false;
 
 		this.site = 'http://novel.syosetu.org/';
 		this.api = 'about:blank';
@@ -2307,20 +3450,15 @@ $(document).ready(function(){
 		var m = HamelnSite.reURL.exec(url);
 		if (m) {
 			this.ncode = m[1];
-			if (!m[2]  || m[2] == 'index.html') {
+			this.isShortStory = (!m[2]  || m[2] == 'index.html');
+			if (this.isShortStory) {
 				// 中身のparseをしないと区別がつかない
 				// 少なくとも連載ではないので仮設定は短編
+				gCurrentManager.setSingleStory ();
 				console.debug('短編 or 目次:', m[2]);
-				this.isShortStory = true;
-				gCurrentSection.id = 1;
-				gGeneralAllNo = 1;
-				setIndexPageDisabled ();
 			} else {
-				this.isShortStory = false;
-				gCurrentSection.id = parseInt(m[3]);
-				console.debug('連載:', gCurrentSection.id);
-				gGeneralAllNo = null;
-				setIndexPageNotReady();
+				gCurrentManager.setCurrent (parseInt(m[3]));
+				console.debug('連載:', gCurrentManager.id);
 			}
 		} else {
 			console.debug('!m:', m);
@@ -2336,6 +3474,23 @@ $(document).ready(function(){
 		console.debug('url', url, url.search(HamelnSite.reURL));
 		return (url.search(HamelnSite.reURL) === 0);
 	};
+
+	// ajaxでページを読み込む
+	// Deferred objectを返す
+	HamelnSite.prototype.getNovelSection = function (section) {
+		if (!gNetworkManager.get()) {
+			return $.Deferred().reject().promise();
+		}
+		return $.get(gSiteParser.getNovelSectionURL (section))
+		.always(function () {
+			gNetworkManager.release();
+		});
+	};
+	// これは上で使われる
+	HamelnSite.prototype.getNovelSectionURL = function (section) {
+		return this.site + this.ncode + '/' + section + '.html';
+	};
+	/////////////// 後は全部class内部でframe構築等で使っているもの
 	// その作品のtopページ
 	HamelnSite.prototype.getNovelBaseURL = function (novel_code) {
 		return this.site + this.ncode + '/';
@@ -2344,12 +3499,9 @@ $(document).ready(function(){
 	HamelnSite.prototype.getNovelIndexURL = function (novel_code) {
 		return this.site + this.ncode + '/';
 	};
-	HamelnSite.prototype.getNovelSectionURL = function (section) {
-		return this.site + this.ncode + '/' + section + '.html';
-	};
 
 	HamelnSite.prototype.getShioriURL = function(section_no) {
-		section_no = (section_no === undefined) ? gCurrentSection.id : section_no;
+		section_no = (section_no === undefined) ? gCurrentManager.id : section_no;
 		return '';
 	};
 	HamelnSite.prototype.changeSection = function(section_no) {
@@ -2390,18 +3542,35 @@ $(document).ready(function(){
 	HamelnSite.prototype.buildReputationForm = function() {
 	};
 
-
-
-
-
-
-
-
-
-
-
-
 	/////////////////////////////////////////////////////////////
+	// next,prevのリンクを拾って次話移動判定に使う
+	// これでindex loadが不要になる
+	// /html/body/div/div/div[2]/div/p/a[2]
+	// html body div#container div#page div#maind div.ss p a
+	//   '<< 前の話'
+	// /html/body/div/div/div[2]/div/p/a[3]
+	// html body div#container div#page div#maind div.ss p a
+	//   '次の話 >>'
+	// a[3]は最終話のときは要素自体なし
+	//<p>
+	//<font size="+2">
+	//(
+	//<a href="http://syosetu.org/?mode=user&uid=${作者id}">${作者名}</a>
+	//)
+	//<br>
+	//<a href="./27.html"><< 前の話</a>
+	//<br>
+	//</p>
+	// pの中の作者にリンクがないケースが有り得るのか不明
+	// (設定次第？)
+	// 先頭も同じ
+	// 結局pの中のリンクで、絶対指定じゃなくて/(\d+\).html/なものを抜いてきて
+	// currentとの間のmin,maxで前後を判定するのが妥当
+	// pは確実に著者取りで使っているのでcontentsで含まれる領域
+	// pの中に本文が埋まっているケースもあるので
+	// font size=+2のあと、font size=+1の前で取る
+	// タイトル～サブタイトルの間
+	//
 	// カラー指定の扱いとtoken関連は調整がいる
 	HamelnSite.prototype.parseHtmlCommon = function (contents, section) {
 		// 著者はfontの直後のa
@@ -2550,17 +3719,27 @@ $(document).ready(function(){
 		this.updateThemeAtSection (contents);
 		this.updateTitleAtSection (contents);
 
-		sections[gCurrentSection.id] = this.parseHtmlCommon (contents, gCurrentSection.id);
-		setupCurrentSectionInfo(gCurrentSection.id);
+		gSectionManager.registData (gCurrentManager.id, this.parseHtmlCommon (contents, gCurrentManager.id));
+		gCurrentManager.setCurrent (gCurrentManager.id);
 
+		// autoPagerが貼り付ける先に独自attrを付ける
+		if (false) {
+			$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a')
+				.attr('data-noja', gCurrentManager.id);
+		}
 		return true;
 	};
 
 	// gSiteParser内で持つ情報は更新しても
 	// globalな情報は呼出し元で更新させる
 	HamelnSite.prototype.loadIndex = function () {
-		var dfrd = new $.Deffered();
-		$.get (this.getNovelIndexURL()).then(
+		var dfrd = new $.Deferred();
+		if (!gNetworkManager.get()) {
+			return dfrd.reject().promise();
+		}
+		$.get (this.getNovelIndexURL()).always(function () {
+			gNetworkManager.release();
+		}).then(
 			// success: .done
 			function (data) {
 				// '#maind'はbody直下ではないからOkのはず
@@ -2608,10 +3787,10 @@ $(document).ready(function(){
 	// 小説情報ページ等から取ってくる手もあるが、
 	// どうせhtmldocを1ページ取得するならindexのほうがいい
 	HamelnSite.prototype.loadMaxSectionNo = function () {
-		var dfrd = new $.Deffered();
+		var dfrd = new $.Deferred();
 		this.loadIndex().then(
 			function (maxSectionNo) {
-				setIndexPageReady();
+				gIndexManager.setIndexPageReady();
 				dfrd.resolve (maxSectionNo);
 			},
 			function () {
@@ -2621,8 +3800,9 @@ $(document).ready(function(){
 		return dfrd.promise ();
 	};
 
+	// 自動loadIndexさせてもいいのだがどうしよう？
 	HamelnSite.prototype.startAsyncProcess = function () {
-		// 自動loadIndexさせてもいいのだがどうしよう？
+		// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
 	};
 
 	// 目次ページを作ったときのtag要素に依存するデータ構造
@@ -2630,6 +3810,39 @@ $(document).ready(function(){
 	HamelnSite.prototype.selectNojaIndexData = function () {
 		return $(' #noja_index .novel_title, #noja_index .novel_writername, #noja_index #novel_ex, #noja_index .index_box');
 	};
+
+	HamelnSite.prototype.customizeMenu = function () {
+		// 初期化段階でのメニューカスタマイズ
+	};
+
+	// Deferred interface
+	HamelnSite.prototype.importInitialContents = function () {
+		// なにもないのでresolveしたDeferredのpromiseを返す
+		return new $.Deferred().resolve().promise();
+	};
+
+	// 「のじゃー」ラベルを元ページに貼り付け
+	HamelnSite.prototype.attachNoja = function () {
+		//$('#novelnavi_right').append(getNojaLabel());
+	};
+
+	HamelnSite.prototype.replaceImageURL = function (url) {
+		return  url;
+	};
+
+	// 
+	HamelnSite.prototype.getNextSection = function (secId) {
+		return ++secId;
+	};
+
+	HamelnSite.prototype.getPrevSection = function (secId) {
+		return --secId;
+	};
+
+
+
+
+
 
 	////////////////////////////////////////////////////////////
 	var gSiteParserList = [
@@ -2644,23 +3857,6 @@ $(document).ready(function(){
 	//////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////
-	// 単ページ対応:切り上げ
-	var getPagesAlinedCanvas = function (npages) {
-		var rem = npages % gPagesPerCanvas;
-		if (rem !== 0) {
-			npages += (gPagesPerCanvas - rem);
-		}
-		return npages;
-	};
-	// 偶数ページ化(右ページ):切り捨て
-	var getFirstPageAlinedCanvas = function (page_no) {
-		return page_no - (page_no % gPagesPerCanvas);
-	};
-
-	var isLastPageInSection = function (page) {
-		return (page >= (gTotalPages + (gTotalPages % gPagesPerCanvas) - gPagesPerCanvas));
-	};
-
 
 
 
@@ -2690,7 +3886,7 @@ $(document).ready(function(){
 
 	// prefix省略ならselector id : ''指定ならid attribute
 	var get_thumb_id = function (page, prefix) {
-		page = (page === undefined) ? gCurrentSection.page : page;
+		page = (page === undefined) ? gCurrentManager.page : page;
 		prefix = (prefix === undefined) ? '#' : prefix;
 		return prefix + 'noja_page_' + page;
 	};
@@ -2771,7 +3967,7 @@ $(document).ready(function(){
 		for (var i = 0; i < text.length; ++i) {
 			if (HANKAKU.indexOf (text[i]) >= 0) {
 				col+=0.5;
-			} else if (i === 0 || '゛゜\u3099\u309A'.indexOf(text[i])<0) {
+			} else if (i === 0 || VOICED_SOUND_MARK.indexOf(text[i])<0) {
 				++col;
 			}
 		}
@@ -2788,34 +3984,87 @@ $(document).ready(function(){
 				} else {
 					col+=0.5;
 				}
-			} else if (i === 0 || '゛゜\u3099\u309A'.indexOf(text[i]) < 0) {
+			} else if (i === 0 || VOICED_SOUND_MARK.indexOf(text[i]) < 0) {
 				++col;
 			}
 		}
 		return col;
 	};
+
+
 	////////////////////////////////////////////////////////
+	var imageLoadHandlerFactory = function (section, page_no) {
+		var ctx = {
+			section_id: section,
+			page_no: page_no,
+		};
+		return function() {
+			// 実際に表示しようとしたload時のhook
+			if (gCurrentManager.id == ctx.section_id) {
+				if (gCurrentManager.page == ctx.page_no) {
+					// canvasエリア描画がトリガー
+					showPage();
+				} else {
+					// jump sliderページの表示がトリガー
+					drawThumbPage (ctx.page_no);
+				}
+			}
+		};
+	};
+	////////////////////////////////////////////////////////
+	var createImageDOMElement = function (url, section_id, page_no) {
+		return $('<img>')
+			.attr('src', url)
+			.bind('load', imageLoadHandlerFactory (section_id, page_no))
+			.get(0)
+		;
+	};
+	// '<img>'要素を直接データとして置くのでこのオブジェクトになる
+	var isImagePage = function (pageData) {
+		return (Object.prototype.toString.call(pageData)
+			.slice(8, -1) === 'HTMLImageElement');
+	};
+	////////////////////////////////////////////////////////
+	// lastPageが画像のDOM elementの可能性がある
+	var isEmptyLastPage = function (arr) {
+		var page = arr[arr.length - 1];
+		if (isImagePage (page)) {
+			return false;
+		}
+		for (var i = 0; i < page.length; ++i) {
+			if (page[i] !== '') {
+				return false;
+			}
+		}
+		return true;
+	};
+
+	////////////////////////////////////////////////////////
+	// @@ TODO @@
+	// 禁則の関係で先読みpeekが発生する
+	// そこでtag開始や文字参照についての扱いが少しまずい可能性がある
+	// 
+	/*
+		パース規則
+		40col/行; 17行/ページ
+		全角文字は1col、半角文字は0.5colとする
+		１・２桁の半角数値及び半角の感嘆符・疑問符(!?)は縦中横とする。
+		（一文字でも二文字でも1col）
+		濁点、半濁点は前の文字に重ねて描画する（行頭に来ない限り0col）
+		禁則文字
+		'!?！？・：；:;‐-=＝〜～ゝゞーァィゥェォッャュョヮヵヶ
+		ぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇷ゚ㇺㇻㇼㇽㇾㇿ々〻'
+		の前の文字は、追い出しを行う。
+		'、。，．）」｝〉》』】］〕〙〛〟”’'
+		は、ぶら下げを行う。
+		'（「｛〈《『【［〔〘〚〝“‘'
+		は、追い出しを行う
+	*/
 	splitPage = function(text, line_num, char_num, space) {
-		/*
-			パース規則
-			40col/行; 17行/ページ
-			全角文字は1col、半角文字は0.5colとする
-			１・２桁の半角数値及び半角の感嘆符・疑問符(!?)は縦中横とする。
-			（一文字でも二文字でも1col）
-			濁点、半濁点は前の文字に重ねて描画する（行頭に来ない限り0col）
-			禁則文字
-			'!?！？・：；:;‐-=＝〜～ゝゞーァィゥェォッャュョヮヵヶ
-			ぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇷ゚ㇺㇻㇼㇽㇾㇿ々〻'
-			の前の文字は、追い出しを行う。
-			'、。，．）」｝〉》』】］〕〙〛〟”’'
-			は、ぶら下げを行う。
-			'（「｛〈《『【［〔〘〚〝“‘'
-			は、追い出しを行う
-		*/
 		if (space === undefined || space === null) {
 			space = 4;
 		}
-		text = text.replace(/\r|\n/g, '');
+		text = text.replace(reAllLineBreak, '');
 		var arr = [];
 		var ruby = [];
 		var pos = 0;
@@ -2824,192 +4073,206 @@ $(document).ready(function(){
 		var len = text.length;
 		var pageData = [];
 		var rb = [];
-		while(space--) {
+		// 先頭padding
+		while (space--) {
 			pageData.push('');
 			rb.push([]);
 		}
 		var ln = '';
 		var r = [];
-		var del = true;
-		var newLine = function() {
-			if (gSetting.kaigyou) {
-				if(ln==='') {
-					if(del) {
-						del = false;
-						return;
-					}
-					else del = true;
-				}
-				else del = true;
-			}
+		var isPrevDeleted = true;
+
+		var newPage = function () {
+			line = 0;
+			col = 0;
+			arr.push(pageData);
+			ruby.push(rb);
+			pageData = [];
+			rb = [];
+		};
+		var raw_newLine = function() {
 			++line;
-			col=0;
-			pageData.push(ln);
-			rb.push(r);
-			ln='';
-			r=[];
+			col = 0;
+			pageData.push (ln);
+			rb.push (r);
+			ln = '';
+			r = [];
+		};
+		var newLine;
+		if (gSetting.kaigyou) {
+			newLine = function() {
+				if (ln === '') {
+					if (isPrevDeleted) {
+						isPrevDeleted = false;
+						return;
+					} else {
+						isPrevDeleted = true;
+					}
+				} else {
+					isPrevDeleted = true;
+				}
+				raw_newLine();
+			};
+		} else {
+			newLine = raw_newLine;
+		}
+		var skipToTerminator = function (idx, terminator) {
+			while (text[idx++] != terminator) {
+				//none
+			}
+			return idx;
+		};
+		var skipToTagEnd = function (idx) {
+			return skipToTerminator(idx, '>');
+		};
+		var skipToString = function (idx, target) {
+			return text.indexOf(target, idx) + target.length;
 		};
 		var getCol_for_ruby = (gYokogaki)
 			? getCol_for_ruby_yokogaki : getCol_for_ruby_tategaki;
+
 		while(true) {
 			while(true) {
-				var ch  =text[pos];
-				var p = pos+1;
-				switch(ch) {
+				var ch  = text[pos];
+				var p = pos + 1;
+				switch (ch) {
 				case '<':
 					++pos;
-					if (text[pos]=='b') {
-						while (text[pos++] != '>') {
-							//none
-						}
+					if (text[pos] == 'b') {
+						pos = skipToTagEnd (pos);
 						newLine();
-					} else if(text[pos]=='r') {
+					} else if (text[pos] == 'r') {
 						// html5で除外された'<rb>'タグに頼るのはあまりよくないが
 						// 真面目にするとなると'<rp>'を抜いて…等手間が多いので
 						// TODOとしてpending
-						p = text.indexOf('</ruby>', pos)+7;
-						var tt = $(text.substr(pos-1, p-pos-1));
+						p = skipToString (pos, '</ruby>');
+						var tt = $(text.substr(pos - 1, p - pos - 1));
 						var b = $('rb', tt).text();
 						var l = getCol_for_ruby(b);
-						if(col+l>char_num) newLine();
-						ln+=b;
+						if (col + l > char_num) {
+							newLine();
+						}
+						ln += b;
 						var t = $('rt', tt).text();
-						// テンポラリ修正:ルビ内半角数字→全角数字
-						// t = t.replace(/[0-9]/g, function(s) {
-						//    return String.fromCharCode(s.charCodeAt(0) + 0xFEE0);
-						// });
-						pos=p;
+						pos = p;
 						r.push([col, l, t]);
-						col+=l;
+						col += l;
 					} else if (text[pos] == 'i') {
-						p = text.indexOf('>', pos)+1;
-						var tt = $(text.slice(pos-1, p));	// <img>タグ全体
-						var s = $(tt).attr('src');
-						if (s === null) {
-							// src指定がないならtag skip
-							pos = p;
-						} else {
-							// 画像は改ページ？
+						p = skipToTagEnd (pos);
+						var tt = $(text.slice(pos - 1, p));	// <img>タグ全体
+						var srcUrl = $(tt).attr('src');
+						if (srcUrl !== null) {
+							// 画像は改ページして1ページに表示する
 							// 処理開始前に諸々flush等
 							newLine();
-							arr.push(pageData);
-							ruby.push(rb);
-							pos = p;
-							// 画像src(@みてみん)のリンクを修正
-							// これはなろう固有の話
-							s = s.replace('viewimagebig', 'viewimage');
-							(function(){
-								var section = gLoadSection;	// parse中のコンテンツのsection
-								// 対応済のはずだが未確認
-								var pgno = getFirstPageAlinedCanvas(arr.length);
-								arr.push($('<img>').attr('src', s)
-									.bind('load', function() {
-										// 実際に表示しようとしたload時のhook
-										if (gCurrentSection.id == section) {
-											if (gCurrentSection.page == pgno) {
-												// canvasエリア描画がトリガー
-												showPage();
-											} else {
-												// jump sliderページの表示がトリガー
-												drawThumbPage (pgno);
-											}
-										}
-									}).get(0)
-								);
-							})();
-							ruby.push([]);
-							line = 0;
-							col = 0;
-							pageData = [];
-							rb = [];
+							newPage();
+							srcUrl = gSiteParser.replaceImageURL(srcUrl);
+							// parse中のコンテンツのsection
+							// 対応済のはずだが未確認
+							pageData = createImageDOMElement (
+								srcUrl
+								, gParseSectionId
+								, gCurrentManager.getFirstPageAlinedCanvas(arr.length)
+							);
+							newPage();
 						}
+						pos = p;
 					} else {
-						while (text[pos++]!='>') {
-							//none
-						}
+						pos = skipToTagEnd (pos);
 					}
 					break;
-				case '゛':
-				case '゜':
-				case '\u3099':	// 単独濁点
-				case '\u309A':	// 単独半濁点
+				case '&':
+					// tagで作って実体値をchに入れる
+					p = skipToTerminator (p, ';');
+					ch = $('<span>' + text.substr(pos, p - pos) + '</span>').text();
+					/* falls through */
+				default:
+					if (VOICED_SOUND_MARK.indexOf(ch) >= 0) {
+						// @@ TODO @@  ページ切り替えをまたぐとうまくいかない
+						// ただし、前ページがimgだった場合など色々考えないといけない。
 						var target;
-						if(ln==='') {
-							if(pageData.length === 0) {
-								var target = arr[arr.length-1];
-								target[target.length-1]+=text[pos];
+						if (ln === '') {
+							if (pageData.length === 0) {
+								var target = arr[arr.length - 1];
+								target[target.length - 1] += text[pos];
+							} else {
+								pageData[pageData.length - 1] += text[pos];
 							}
-							else {
-								pageData[pageData.length-1]+=text[pos];
-							}
-						}
-						else {
+						} else {
 							ln += text[pos];
 						}
 						++pos;
 						break;
-				case '&':
-						while (text[p++] != ';') {
-							// none
-						}
-						ch = $('<span>'+text.substr(pos, p-pos)+'</span>').text();
-						/* falls through */
-				default:
-					if (HANKAKU.indexOf(ch) >= 0) {
-						if((ln===''||HANKAKU.indexOf(text[pos-1])<0||text[pos-1]=='>')&&
-							TATECHUYOKO.indexOf(ch)>=0&&
-							(p>=text.length||text[p]=='<'||HANKAKU.indexOf(text[p])<0)) {
-							++col;
-						}
-						else col += 0.5;
 					}
-					else {
+					if (HANKAKU.indexOf(ch) >= 0) {
+						// (行頭の半角 or 半角領域先頭 or tag終了直後の半角)
+						// かつ、縦中横 かつ、
+						// かつ、(文字列末尾or次がタグ開始or半角領域1文字)
+						// @@ TODO@@ 次文字が&による参照である場合に問題
+						if ((ln === '' || HANKAKU.indexOf (text[pos - 1]) < 0
+							|| text[pos - 1] == '>')
+							&& TATECHUYOKO.indexOf(ch) >= 0
+							&& (p >= text.length || text[p] == '<'
+								|| HANKAKU.indexOf(text[p]) < 0)) {
+							++col;
+						} else {
+							// 縦中横にならない場合は半角=0.5カラム
+							col += 0.5;
+						}
+					} else {
 						++col;
 					}
-					var _pos = pos;
-					pos=p;
-					if(col>=char_num-1 && GYOUMATSUKINSOKU.indexOf(text[pos])>=0) {
-						ln+=ch;
+					// @@TODO@@ 次文字lookupでtag,&の関連がまずい可能性がある
+					var _pos = pos;	// 現文字
+					pos = p;	// 次文字
+					if (col >= char_num - 1
+						&& GYOUMATSUKINSOKU.indexOf(text[pos]) >= 0) {
+						// 次文字が行末禁則なら現文字が0.5カラム文字だろうと
+						// 改行させる
+						ln += ch;
 						newLine();
-					}
-					else if(col >= char_num - 0.5) {
-						if (BURASAGE.indexOf(text[pos])>=0) {
-							ln+=ch+text[pos];
+					} else if (col >= char_num - 0.5) {
+						// 行末:次がtagでない限り改行するが、
+						// 禁則関連で処理が変わる
+						if (BURASAGE.indexOf(text[pos]) >= 0) {
+							// 次文字がぶら下げ文字なら現在行に入れてしまう
+							ln += ch + text[pos];
 							++pos;
+						} else if (GYOUTOUKINSOKU.indexOf(text[pos]) >= 0) {
+							// 次文字が行頭禁則なら
+							// 現在の文字を一度捨てて改行させる
+							// (現在の文字を次行に送り込み)
+							pos = _pos;
+						} else {
+							ln += ch;
 						}
-						else if (GYOUTOUKINSOKU.indexOf(text[pos])>=0) {
-							pos=_pos;
+						if (text[pos] !== '<') {
+							newLine();
 						}
-						else {
-							ln+=ch;
-						}
-						if(text[pos]!=='<') newLine();
+					} else {
+						ln += ch;
 					}
-					else ln+=ch;
 					break;
 				}
-				if(pos>=len) {
+				// 1文字分の処理終わり
+				// 改ページ判定
+				if (pos >= len) {	// text end
 					newLine();
 					break;
 				}
-				if (pos>=len||line >= line_num) break;
+				if (pos >= len || line >= line_num) {
+					break;
+				}
 			}
-			arr.push(pageData);
-			ruby.push(rb);
-			if(pos>=len) break;
-			line = 0;
-			col = 0;
-			pageData = [];
-			rb = [];
-		}
-		var _a = arr[arr.length-1];
-		var flag = true;
-		for(var i = 0; i < _a.length; ++i) {
-			if(_a[i]!=='') {
-				flag = false;
+			// 1ページ分の処理終わり
+			// 改ページ
+			newPage();
+			if (pos >= len) {
+				break;
 			}
 		}
-		if(flag) {
+		// 最終ページが空ページだった場合に除去
+		if (isEmptyLastPage(arr)) {
 			arr.pop();
 			ruby.pop();
 		}
@@ -3028,16 +4291,17 @@ $(document).ready(function(){
 		}
 	};
 	////////////////////////////////////////////////////////
-	splitContentsBody = function (sec, sec_id) {
-		console.debug('split contents body: sec_id', sec_id);
+	// 本文がnullの可能性はないとしておく
+	splitContentsBody = function (secData, secId) {
+		console.debug('split contents body: secId', secId);
 		console.debug('lc', gLinesPerCanvas, gCharsPerLine);
-		if (sec_id !== undefined) {
-			gLoadSection = sec_id;	// splitPageでimg関連で必要になる
+		if (secId !== undefined) {
+			gParseSectionId = secId;	// splitPageでimg関連で必要になる
 		}
-		sec.honbun  =   splitPage(sec._honbun,  gLinesPerCanvas, gCharsPerLine);
-		sec.maegaki = splitPageEx(sec._maegaki, gLinesPerCanvas, gCharsPerLine, 2);
-		sec.atogaki = splitPageEx(sec._atogaki, gLinesPerCanvas, gCharsPerLine, 2);
-		return sec;
+		secData.honbun  =   splitPage(secData._honbun,  gLinesPerCanvas, gCharsPerLine);
+		secData.maegaki = splitPageEx(secData._maegaki, gLinesPerCanvas, gCharsPerLine, 2);
+		secData.atogaki = splitPageEx(secData._atogaki, gLinesPerCanvas, gCharsPerLine, 2);
+		return secData;
 	};
 	////////////////////////////////////////////////////////
 	$.templates('downloadSectionTmpl', '#noja_download_section_template');
@@ -3080,59 +4344,10 @@ $(document).ready(function(){
 	};
 
 	////////////////////////////////////////////////////////
-	// 文章領域のページ数を計算する
-	// 一部で有無checkを_maegakiのraw側でしている部分もあったが
-	var countPages = function (section) {
-		var nPages = sections[section].honbun[0].length;
-		if (sections[section].maegaki !== null && gSetting.fMaegaki) {
-			nPages += sections[section].maegaki[0].length;
-		}
-		if (sections[section].atogaki !== null && gSetting.fAtogaki) {
-			nPages += sections[section].atogaki[0].length;
-		}
-		return nPages;
-	};
-	// アライメント補正はなし
-	// 数える対象はグローバル変数に入ったもの
-	var countPagesInCurrentSection = function () {
-		var nPages = gCurrentSection.honbun[0].length;
-		if (gCurrentSection.maegaki !== null && gSetting.fMaegaki) {
-			nPages += gCurrentSection.maegaki[0].length;
-		}
-		if (gCurrentSection.atogaki !== null && gSetting.fAtogaki) {
-			nPages += gCurrentSection.atogaki[0].length;
-		}
-		return nPages;
-	};
-	////////////////////////////////////////////////////////
-	// 指定section範囲のページ数を計算
-	var countPagesInSections = function (beginSection, endSection) {
-		beginSection = (beginSection === undefined) ? 1 : beginSection;
-		endSection   = (endSection   === undefined) ? gCurrentSection.id : endSection;
-		var nPages = 0;
-		for (var i = beginSection; i < endSection; ++i) {
-			if (!(i in sections) || sections[i] === false) {
-				return null;
-			}
-			var n = countPages(i);	// checkを_maegaki側でしていたようだがまあいいか
-			// キャンバス内ページ数可変対応済
-			nPages += getPagesAlinedCanvas(n);
-		}
-		return nPages;
-	};
 
 
 
 	////////////////////////////////////////////////////////
-	var setupCurrentSectionInfo = function (section) {
-		gCurrentSection.id = section;
-		// このあたりはsection構造そのままcopyでいいはず
-		gCurrentSection.chapter_title = sections[gCurrentSection.id].chapter_title;
-		gCurrentSection.subtitle = sections[gCurrentSection.id].subtitle;
-		gCurrentSection.maegaki = sections[gCurrentSection.id].maegaki;
-		gCurrentSection.atogaki = sections[gCurrentSection.id].atogaki;
-		gCurrentSection.honbun = sections[gCurrentSection.id].honbun;
-	};
 
 
 
@@ -3155,34 +4370,46 @@ $(document).ready(function(){
 
 	////////////////////////////////////////////////////////
 	// 右スライダーのページナビ
+	// canvasにtagでsection idとpage noを埋め込んだ方がいいのかもしれず
 	$.templates('updateNaviIndexTmpl', '<div>{{:page}}ページ</div>');
 	// canvasもtemplate化したほうがいいが、html側にもっていくべき
 
+	var navigationClickHandlerFactory = function (secId, pageNo) {
+		// bindのfunction objectで使うためのコンテキスト
+		var jumpInfo = {secId: secId, pageNo: pageNo};
+		return function() {
+			jumpTo (jumpInfo.secId, jumpInfo.pageNo);
+		};
+	};
+
+	// この関数自体は
+	// ・レイアウト切り替え(gSettingsの変化)
+	// ・フォントサイズ等viewパラメータの変化
+	// ・セクション移動
+	// に付随して呼ばれるべきもの
 	updateNavigation = function() {
 		var navi = navigationFrame.$div();
 		navi.empty();
-		gTotalPages = countPagesInCurrentSection();
 		var canvas_attr = {
 			width: gThumbSize.width + 'px',
 			height: gThumbSize.height + 'px',
 		};
 		// @@ 一応単ページ対応
-		for (var no = 0; no < gTotalPages; no += gPagesPerCanvas) {
-			canvas_attr.id = get_thumb_id(no, '');
-			(function() {
-				// bindのfunction objectで使うためのコンテキスト
-				var jump = {section: gCurrentSection.id, page_no: no};
-				navi.append($.render.updateNaviIndexTmpl({page: (no + 1)}))
-					.append(
-						$('<canvas/>')
-						.attr(canvas_attr)
-						.css('border-color', gSiteParser.color)
-						.bind('click', function() {
-							jumpTo (jump.section, jump.page_no);
-						})
-					);
-				drawThumbPage (no);
-			})();
+		var secId = gCurrentManager.id;
+		for (var pageNo = 0;
+			pageNo < gCurrentManager.totalPages;
+			pageNo += gCurrentManager.pagesPerCanvas) {
+			canvas_attr.id = get_thumb_id(pageNo, '');
+			navi.append($.render.updateNaviIndexTmpl({page: (pageNo + 1)}))
+				.append(
+					$('<canvas/>')
+					.attr(canvas_attr)
+					.css('border-color', gSiteParser.color)
+					.bind('click', 
+						navigationClickHandlerFactory (secId, pageNo)
+					)
+				);
+			drawThumbPage (pageNo);
 		}
 		showNavigationCursor ();
 	};
@@ -3190,97 +4417,55 @@ $(document).ready(function(){
 
 	////////////////////////////////////////////////////////
 	var isNetworkBusy = function (msg) {
-		if (gLoading && msg) {
+		var status = gNetworkManage.isBusy();
+		if (status && msg) {
 			statusFrame.showMessage ('川・◊・)ねっとわーく接続中なのじゃー。' + msg);
 		}
-		return gLoading;
+		return status;
 	};
 
+
+	////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////
 	//各話の各ページにジャンプする関数。toPageに負の値を渡すと最後尾ページにジャンプ。
 
-	jumpTo = function(section, toPage) {
-		var show_hyouka_form = function() {
-			statusFrame.showMessage('川・◊・)いま投稿されているのはここまでなのじゃー。感想を書いてあげるといいのじゃー。');
-			if (gSiteParser.enableReputationForm) {
-				$('#noja_hyouka').show();
-			}
-		};
-		if (!gSiteParser.isSectionInLowerBound(section)) {
-			statusFrame.showMessage('(´・ω・｀)ここが最初の話だよ');
-			return;
-		}
-		//ジャンプ先が全話数より多ければ終了
-		if (gGeneralAllNo && section > gGeneralAllNo) {
-			console.debug("gGeneralAllNo, section", gGeneralAllNo, section);
-			show_hyouka_form();
-			return;
-		}
-		//isChangeSection===trueなら話移動が必要
-		var isChangeSection = (section != gCurrentSection.id);
-		//sectionに負の値を渡すと現在の話を強制再読み込み。
-		if (gSiteParser.isReloadSection(section)) {
-			section = gCurrentSection.id;
-			isChangeSection = true;
-		}
-		//まだ読み込まれていない
-		if (!(section in sections) || sections[section] === false
-			|| sections[section] === null) {
-			//読み込み終了までにこれが変更されてなかったら読み込み終了後にジャンプ
-			gNextPage = toPage;
-			gNextSection = section;
-			//読み込み中はtrueをマークする
-			sections[section] = true;
-			++gLoading;
-			//読み込み関数
-			var load_section_main = function() {
-				statusFrame.showLoading ();
-				//ajaxでページを読み込む。
-				$.get(gSiteParser.getNovelSectionURL (section))
-				.then (
-					// success: 成功
-					function (data) {
-						//データを登録
-						sections[section] = gSiteParser.parseHtmlContents(data, section);
-						autoPagerize(sections[section], section);
-						--gLoading;
-						//ステータスバーに成功を通知
-						statusFrame.showMessage('(｀・ω・´)成功!!');
-						gSiteParser.updateMaxSection(section);
-						if (gNextPage != gCurrentSection.page
-							|| gNextSection != gCurrentSection.id) {
-							// ロードが終わったので再度本体関数を呼び出す
-							jumpTo (gNextSection, gNextPage);
-						}
-						if (gSetting.autoSave) {
-							nojaSave(false);
-						}
-					},
-					// error: ステータスバーに失敗を通知
-					function() {
-						statusFrame.showMessage('失敗(´・ω・｀)……');
-						//失敗時はfalseをマークする。
-						sections[section] = false;
-						--gLoading;
-					}
-				);
-			};
-			// ・存在が確認済の場合:無条件にload
-			// ・最大話数が取得されていないなら取得しチェックしてからload
-			// ・取得途中なら待ち
+	//関数に直接くっつけたので不要
+	//読み込み中にセットされるページとセクション番号。
+	//読み込み前に保存した数が終了後と同じだったらそのまま新しく読み込んだ話にジャンプ
+	//そうでなかったらユーザーの操作で移動したことになるため、ジャンプしない
+	var gLoadSectionInfo = {
+		pageNo: 0,
+		sectionId: 0,
+		set: function (sectionId, pageNo) {
+			this.sectionId = sectionId;
+			this.pageNo = pageNo;
+		},
+		equals: function (secionId, pageNo) {
+			return (this.sectionId == section.id) && (this.pageNo == pageNo);
+		},
+	};
+
+	var gLoadSectionManager = {
+		ERROR_FIRST_SECTION: -1,
+		ERROR_LAST_SECTION:  -2,
+		ERROR_REQUESTED_SECTION:  -3,	// 読み込み中
+		ERROR_NETWORK_FAILED: -4,		//
+		interval: 100,
+		// ・存在が確認済の場合:無条件にload
+		// ・最大話数が取得されていないなら取得しチェックしてからload
+		// ・取得途中なら待ち
+		isSectionLoadable: function (section) {
+			var dfrd = new $.Deferred();
 			if (gSiteParser.canJumpToSection(section)) {
 				// 読み込まれていないが現在の最大セクションよりも小さいセクションを
 				// 要求した場合は確実に存在するのでロードすればよい
-				load_section_main();
+				return dfrd.resolve(section).promise();
 			} else if (gGeneralAllNo === null) {
 				console.debug('load max section no');
 				//話数カウントされていない場合
 				//読み込み中をマーク
 				gGeneralAllNo = false;
 				statusFrame.showLoading ();
-				/// max取得成功した場合は引き続いてメインを呼ぶので
-				// gLoadingはまだonにしたまま
-				// 失敗したときだけoffにする
 				gSiteParser.loadMaxSectionNo().then(
 					// 成功
 					function (maxSectionNo) {
@@ -3288,92 +4473,205 @@ $(document).ready(function(){
 						gGeneralAllNo = maxSectionNo;
 						gSiteParser.updateMaxSection(gGeneralAllNo, true);
 						if (section <= gGeneralAllNo) {
-							// 存在が確認できたのでsection本体のロードを開始
-							load_section_main();
+							// 存在が確認できたのでload Ok
+							dfrd.resolve(section);
 						} else {
-							show_hyouka_form();
-							sections[section] = false;
+							dfrd.reject(this.ERROR_LAST_SECTION);
 						}
 					},
 					// 失敗
 					function (maxSectionNo) {
-						statusFrame.showMessage ('失敗(´・ω・｀)……');
-						sections[section] = false;
-						--gLoading;
 						gGeneralAllNo = null;
+						dfrd.reject(this.ERROR_NETWORK_FAILED);
 					}
 				);
 			} else if (gGeneralAllNo === false) {
-				/// max取得成功した場合は引き続いてメインを呼ぶので
-				// gLoadingはまだonにしたまま
-				// 本当はこれもgSiteParser側に移動したいところ
-				// 読み込み中でまだ完了してないなら
+				// 他reqによる取得中でまだ完了してないなら
 				var wait_for_section_info = function() {
 					if (gGeneralAllNo === false) {
 						// まだ終わってないなら待ち
-						setTimeout (wait_for_section_info, 100);
-					} else if (gGeneralAllNo === null || section > gGeneralAllNo) {
-						// 読み終わったが最大セクション数不定
-						// ジャンプ先セクションが最大を超える
-						// 場合は諦める
-						sections[section] = false;
-						--gLoading;
+						setTimeout (wait_for_section_info, this.interval);
+					} else if (gGeneralAllNo === null) {
+						// 他req完了したが、最大セクション数不明(getがエラー)
+						dfrd.reject(this.ERROR_NETWORK_FAILED);
 					} else {
-						// 情報取得しおわり、セクション指定も範囲内と確認できたので
-						// 実体のコンテンツ取得を呼ぶ
-						load_section_main();
+						if(section > gGeneralAllNo) {
+							// ジャンプ先セクションが最大を超える場合はエラー
+							dfrd.reject(this.ERROR_LAST_SECTION);
+						} else {
+							// 情報取得しおわり、セクション指定も範囲内と確認できたので
+							// 実体のコンテンツ取得を呼ぶ
+							dfrd.resolve(section);
+						}
 					}
 				};
-				setTimeout (wait_for_section_info, 100);
+				setTimeout (wait_for_section_info, this.interval);
 			}
-			// いずれにせよ非同期読み込みが終わって再度callされるまでは
-			// することがないので終了
-			return;
-		}
-		//読み込み中なので終了。
-		if (sections[section] === true) {
-			return;
-		}
-		// reMake後の状態でsections[]側は変わっているので
-		// そっちをベースにすれば問題ないはずか。
-		// 文章領域のページ数を計算する
-		var nPages = countPages(section);
-		// 負のページ数指定はendからのページ位置に変換
-		if (toPage < 0) {
-			toPage += nPages;
-		}
-		// @@ 単ページモード対応済
-		toPage = getFirstPageAlinedCanvas(toPage);	// 偶数ページ化(右ページ)
+			return dfrd.promise();
+		},
+		// secNoのセクションがSectionManagerのDBにあるかどうかは関係なく
+		// 指定されたsecNoのものを読んでくる
+		// rawなI/Fとして常に指定secNoのものを読むモード
+		// 呼出し側で既存チェックし再利用するか強制ロードするかを決める
+		load: function(secNo, force) {
+			if (force === undefined) {
+				force = false;
+			}
+			var dfrd = $.Deferred();
+			// 再読み込みではなくDB上にある
+			if (!force && gSectionManager.isSectionReady(secNo)) {
+				return dfrd.resolve(secNo, false).promise();
+			}
+			// 下限エラー
+			if (!gSiteParser.isSectionInLowerBound(secNo)) {
+				return dfrd.reject(this.ERROR_FIRST_SECTION).promise();
+			}
+			// 上限エラー
+			if (gGeneralAllNo && secNo > gGeneralAllNo) {
+				return dfrd.reject(this.ERROR_LAST_SECTION).promise();
+			}
+			// 既に読み込み中ならエラー
+			if (gSectionManager.isSectionLoading(secNo)) {
+				return dfrd.reject(this.ERROR_REQUESTED_SECTION).promise();
+			}
+			// まだ読み込まれていない場合は
+			// まずmax情報を確認する
+			// 読み込み中はtrueをマークする
+			gSectionManager.setStatusLoading(secNo);
+			this.isSectionLoadable(secNo).then(function () {
+				dfrd.notify(secNo);		// progress通知
+				// 指定secNoを読み込む
+				gSiteParser.getNovelSection (secNo).then (
+					function (data) {
+						//console.debug('load success', data);
+						// 成功した場合はデータを登録
+						// この場合、読み込み前にLoadingにしてあるので
+						// forceにしないとまずい？
+						// そこは直したが、
+						// gSectionManager.setStatusInvalid(secNo);
+						var secData = gSectionManager.registData (secNo
+							, gSiteParser.parseHtmlContents(data, secNo), true);
+						autoPagerize(secData, secNo);
+						gSiteParser.updateMaxSection(secNo);
+						// 新しいsecNoを登録したので自動saveするならsaveが動く
+						if (gSetting.autoSave) {
+							nojaSave(false);
+						}
+						dfrd.resolve(secNo, true);
+					},
+					function () {
+						return $.Deferred().reject(this.ERROR_NETWORK_FAILED).promise();
+					}
+				);
+			}).fail(function() {
+				// loadableチェック失敗 or loadそのものが失敗
+				//失敗時はfalseをマークする。
+				gSectionManager.setStatusInvalid(secNo);
+				dfrd.reject(err);
+			});
+			return dfrd.promise();
+		},
+	};
 
-		// 次話強制ではない場合、
-		// 同ページのまま or toPageの計算が範囲外なら処理終了
-		if (!isChangeSection
-			&& (toPage == gCurrentSection.page || !(toPage >= 0 && toPage < nPages))) {
-			return;
-		}
-		gNextPage = toPage;
-		gNextSection = section;
 
-		// このあたりがちょい問題
-		// reMakeとの同期が取れていないはず(オリジナルから)
-		//
-		// これって話数移動したら最大ページ数も変化するので
-		// selectorでの指定先がない場合もあるのだがいいのかな？
-		// (先にnavigation updateしないと)
-		// 一応Cursor処理側でなくてもエラーにはならないようにしたが、
-		// カーソルが消えることがあるかも？
-		// (section移動:page=0だから実際にはありえない話か？)
-		hideNavigationCursor();
-		gCurrentSection.page = toPage;
-		showNavigationCursor();
-		//
-		if (isChangeSection) {
-			// 話の移動だった場合は情報更新
-			setupCurrentSectionInfo (section);
-			gSiteParser.changeSection (section);
-			updateNavigation();
+
+
+	jumpTo = function(section, toPage) {
+		//isChangeSection===trueなら話移動が必要
+		var force = false;
+		var isChangeSection = (section != gCurrentManager.id);
+		//sectionに負の値を渡すと現在の話を強制再読み込み。
+		if (gSiteParser.isReloadSection(section)) {
+			section = gCurrentManager.id;
+			isChangeSection = true;
+			force = true;
 		}
-		showPage();
+		//開始
+		console.debug('jumpTo:', section, force);
+		gLoadSectionManager.load (section, force).then(
+			function (loadSecNo, isLoaded) {
+				console.debug('load success', loadSecNo, isLoaded);
+				// 実際にロードせずにdbにあった場合は!isLoaded
+				if (isLoaded) {
+					// 実際にロードした場合はステータスバーに成功を通知
+					statusFrame.showMessage('(｀・ω・´)成功!!');
+				}
+				// ロードが終わった段階で
+				// 他の操作で別ページが表示されたりしていない場合
+				if (!force && !jumpTo.waiting) {
+					// 読み込み中に別ページに移動して
+					// それが正常に完了した状態なのでジャンプそのものは行わない
+					return $.Deferred().reject().promise();
+				}
+				// forceの時はpending中に他のjumpが完了したかどうか判断できない
+				// というかequalで見る必要はないのかも？
+			},
+			function (err) {
+				console.debug('load failed', err);
+				switch (err) {
+				case gLoadSectionManager.ERROR_FIRST_SECTION:
+					statusFrame.showMessage('(´・ω・｀)ここが最初の話だよ');
+					break;
+				case gLoadSectionManager.ERROR_LAST_SECTION:
+					console.debug("gGeneralAllNo, section", gGeneralAllNo, section);
+					statusFrame.showMessage('川・◊・)いま投稿されているのはここまでなのじゃー。感想を書いてあげるといいのじゃー。');
+					if (gSiteParser.enableReputationForm) {
+						$('#noja_hyouka').show();
+					}
+					break;
+				case gLoadSectionManager.ERROR_REQUESTED_SECTION:
+					//読み込み中ならサイレント
+					break;
+				case gLoadSectionManager.ERROR_NETWORK_FAILED:
+					statusFrame.showMessage ('失敗(´・ω・｀)……');
+					break;
+				}
+			},
+			function () {	// 実際のロード開始直前に呼ばれるprogress
+				console.debug('load started async');
+				jumpTo.waiting = true;
+			}
+		).then(function () {
+			console.debug('and then');
+			// 文章領域のページ数を計算する
+			var nPages = gSectionManager.countPages(gSectionManager.getData(section), gSetting);
+			// 負のページ数指定はendからのページ位置に変換
+			if (toPage < 0) {
+				toPage += nPages;
+			}
+			// @@ 単ページモード対応済
+			toPage = gCurrentManager.getFirstPageAlinedCanvas(toPage);	// 偶数ページ化(右ページ)
+
+			// 次話強制ではない場合、
+			// 同ページのまま or toPageの計算が範囲外なら処理終了
+			if (!isChangeSection
+				&& (toPage == gCurrentManager.page || !(toPage >= 0 && toPage < nPages))) {
+				return;
+			}
+			jumpTo.pending = false;
+
+			// このあたりがちょい問題
+			// reMakeとの同期が取れていないはず(オリジナルから)
+			//
+			// これって話数移動したら最大ページ数も変化するので
+			// selectorでの指定先がない場合もあるのだがいいのかな？
+			// (先にnavigation updateしないと)
+			// 一応Cursor処理側でなくてもエラーにはならないようにしたが、
+			// カーソルが消えることがあるかも？
+			// (section移動:page=0だから実際にはありえない話か？)
+			hideNavigationCursor();
+			gCurrentManager.page = toPage;
+			showNavigationCursor();
+			//
+			if (isChangeSection) {
+				// 話の移動だった場合は情報更新
+				gCurrentManager.setCurrent (section);
+				gSiteParser.changeSection (section);
+				gCurrentManager.updateTotalPages(gSetting);
+				updateNavigation();
+			}
+			showPage();
+		});
 	};
 	////////////////////////////////////////////////////////
 	var drawCanvasBackground = function (ctx, drawCanvasSize, fontSize, drawZoomRatio) {
@@ -3588,7 +4886,7 @@ $(document).ready(function(){
 					ctx.translate(x + $x(1.0), y + $y(0.85));
 					if (HANKAKU.indexOf (ch) >= 0) {
 						x += $x(0.5);
-					} else if ('゛゜\u3099\u309A'.indexOf (ch) >= 0) {
+					} else if (VOICED_SOUND_MARK.indexOf (ch) >= 0) {
 						ctx.translate ($x(-0.25), $y(0));
 					} else {
 						x += $x(1.0);
@@ -3722,14 +5020,10 @@ $(document).ready(function(){
 					} else if (KOMOJI.indexOf(ch) >= 0) {
 						ctx.translate(fontSize/10, -fontSize/8);
 						y+=fontSize;
-					} else if ('゛゜\u3099\u309A'.indexOf(ch) >= 0) {
-						// 3099-309Cまでの記号
-						// 3099は濁点の右上位置にあるもの(合成用？)
-						// 309Aは半濁点の右上位置にあるもの(合成用？)
-						// 309Bは単体の濁点(左上位置)
-						// 309Cは単体の半濁点(左上位置)
+					} else if (VOICED_SOUND_MARK.indexOf(ch) >= 0) {
+						// 前の文字に合成するような形にする濁点半濁点
 						ctx.translate(fontSize * 0.75, -fontSize);
-					} else if ('☹☺☻☼♠♡♢♣♤♥♦♧♫♬♮'.indexOf(ch) >= 0) {
+					} else if (TOWIDEWIDTHSYMBOLS.indexOf(ch) >= 0) {
 						// 特殊記号を大き目に
 						ctx.font = get_canvas_font (fontSize * 1.5, null);
 						ctx.translate(fontSize * 0.175, fontSize * 0.15);
@@ -3842,69 +5136,28 @@ $(document).ready(function(){
 		var upper_running_head_margin = getMarginOfUpperRunningHead (bodyFontSize);
 
 
-		// 全話つなげるならgCurrentSection.id手前までのページ数を計算
-		var page_base = (gAllpage) ? countPagesInSections (1, gCurrentSection.id) : 0;
-		// tposはsubtitleを書くページ位置(main text開始ページ)
-		// 前書きがあれば前書き終了後の次ページ
-		var tpos = (gCurrentSection.maegaki !== null && gSetting.fMaegaki)
-			? gCurrentSection.maegaki[0].length : 0;
-		var apos = tpos + gCurrentSection.honbun[0].length;
-
-		var FRONT_MATTER = 0;
-		var MAIN_TEXT = 1;
-		var BACK_MATTER = 2;
-
-		var getTextType = function (page_no) {
-			if (page_no < tpos) {
-				return FRONT_MATTER;
-			} else if (page_no < apos) {
-				return MAIN_TEXT;
-			}
-			return BACK_MATTER;
-		};
-		var isMainTextFirstPage = function (page_no) {
-			return (page_no == tpos);
-		};
-
-		var isMainTextPage = function (page_no) {
-			return (getTextType (page_no) == MAIN_TEXT);
-		};
-
-		var getPageText = function (page_no) {
-			switch (getTextType (page_no)) {
-			case FRONT_MATTER:
-				return {
-					bodyLines: gCurrentSection.maegaki[0][page_no - 0],
-					rubyLines: gCurrentSection.maegaki[1][page_no - 0],
-				};
-			case MAIN_TEXT:		// 本文
-				return {
-					bodyLines: gCurrentSection.honbun[0][page_no - tpos],
-					rubyLines: gCurrentSection.honbun[1][page_no - tpos],
-				};
-			case BACK_MATTER:	// 後書き
-				return {
-					bodyLines: gCurrentSection.atogaki[0][page_no - apos],
-					rubyLines: gCurrentSection.atogaki[1][page_no - apos],
-				};
-			}
-			return {};
-		};
+		// 全話つなげるならgCurrentManager.id手前までのページ数を計算
+		var page_base = (gAllpage)
+			? gSectionManager.countSectionPages (1, gCurrentManager.id, gSetting)
+			: 0;
+		var pageMap = gCurrentManager.getPageMap(gSetting);
 
 		///////////////////////////////////////
 		// 左右ページの描画
 		var page_size = {
-			width: (drawSize.width / gPagesPerCanvas),
+			width: (drawSize.width / gCurrentManager.pagesPerCanvas),
 			height: drawSize.height,
 		};
-		console.debug("drawSize", drawSize);
-		console.debug("page_size", page_size);
-		var end_page = Math.min(pageIndex + gPagesPerCanvas, gTotalPages);
-		for (var currentDrawPage = pageIndex; currentDrawPage < end_page; ++currentDrawPage) {
+		//console.debug("drawSize", drawSize);
+		//console.debug("page_size", page_size);
+		var end_page = Math.min(pageIndex + gCurrentManager.pagesPerCanvas, pageMap.size);
+		for (var currentDrawPage = pageIndex;
+			currentDrawPage < end_page;
+			++currentDrawPage) {
 			// pageIndexはもともとintだから型変換比較でいいはず
 			var is_first_page = (currentDrawPage == pageIndex);
-			console.debug("is_first_page", is_first_page);
-			console.debug("page_size", page_size);
+			//console.debug("is_first_page", is_first_page);
+			//console.debug("page_size", page_size);
 			// 左右マージンの違いを考慮しないページ全体としてのオフセット
 			// 横書き:
 			//    (左ページ,右ページ) : 0 * page_size.width : 1 * page_size.width
@@ -3916,9 +5169,9 @@ $(document).ready(function(){
 			} else {
 				offsetOfPage_x = ((is_first_page) ? 1 : 0) * page_size.width;
 			}
-			console.debug("offsetOfPage_x", offsetOfPage_x);
+			//console.debug("offsetOfPage_x", offsetOfPage_x);
 			var offsetOfPageRight_x = (offsetOfPage_x + page_size.width);
-			console.debug("offsetOfPageRight_x", offsetOfPageRight_x);
+			//console.debug("offsetOfPageRight_x", offsetOfPageRight_x);
 
 			// 左右ページで違うマージン補正用
 			// 
@@ -3926,22 +5179,24 @@ $(document).ready(function(){
 			if (gYokogaki) {
 				offsetOfPageWithAlign_x += ((is_first_page) ? 0 : -(bodyFontSize * 2));
 			}
-			console.debug("offsetOfPageWithAlign_x", offsetOfPageWithAlign_x);
+			//console.debug("offsetOfPageWithAlign_x", offsetOfPageWithAlign_x);
 			var is_left_page = (gYokogaki) ? is_first_page : !is_first_page;
 			var is_right_page = !is_left_page;
-			console.debug("left, right", is_left_page, is_right_page);
+			//console.debug("left, right", is_left_page, is_right_page);
 
 			var displayPageNo = page_base + currentDrawPage + 1;
-			console.debug("display page no", displayPageNo);
+			//console.debug("display page no", displayPageNo);
+
+			var titleInfo = gCurrentManager.getTitle ();
 
 			// サブタイトル表示
-			if (isMainTextFirstPage (currentDrawPage)) {
+			if (pageMap.isMainTextFirstPage (currentDrawPage)) {
 				var subtitleFontSize = bodyFontSize * 1.4;
 				ctx.save();
 				ctx.font = get_canvas_font (subtitleFontSize);
-				var text = gCurrentSection.subtitle;
+				var text = titleInfo.subtitle;
 				// @@ TODO@@ この判定はgSiteParser.isShortStory()等のほうが良い
-				if (isIndexPageDisable()) {
+				if (gIndexManager.isIndexPageDisable()) {
 					text += '　　　' + gSiteParser.author;
 				}
 				var offset = { x: 0, y: bodyFontSize * 6};
@@ -3966,12 +5221,12 @@ $(document).ready(function(){
 				ctx.restore();
 			}
 
-			var pageText = getPageText (currentDrawPage);
+			var pageText = pageMap.getPageText (currentDrawPage);
 
 			// 前書き・後書き:囲いbox部分のみ先行描画
 			// 本文の字下げ(横だと左ページ基準での字下げ数)
 			var bodyIndent = 3;
-			if (!isMainTextPage (currentDrawPage)) {
+			if (!pageMap.isMainTextPage (currentDrawPage)) {
 				if (gLayout) {
 					draw_layout_box (ctx, is_first_page, page_size.width);
 					++bodyIndent;	// 追加1字下げ
@@ -3980,8 +5235,7 @@ $(document).ready(function(){
 
 			// 選んだ領域の該当ページにimgがあった場合の処理
 			// ノンブル等もなしでベタの1page画像
-			if (Object.prototype.toString.call(pageText.bodyLines)
-				.slice(8, -1) === 'HTMLImageElement') {
+			if (isImagePage (pageText.bodyLines)) {
 				// drawZoomRatioはdrawPageの引数でデフォルト1
 				//  page index部の場合に使われる
 				// 2倍サイズで計算(canvas自体が2倍サイズなので)
@@ -4008,8 +5262,8 @@ $(document).ready(function(){
 			if (is_right_page) {
 				// 右4文字マージン,縦は上から2.5文字の位置 or 2,3文字の位置(高:2文字)
 				var offset_x = offsetOfPageRight_x - upper_running_head_margin.x;
-				var text1 = gCurrentSection.chapter_title;
-				var text2 = gCurrentSection.subtitle;
+				var text1 = titleInfo.chapter_title;
+				var text2 = titleInfo.subtitle;
 				if (text1 === '') {
 					// 章タイトルがない場合は2～3行領域に上下中央寄せでサブタイのみ
 					ctx.fillText (
@@ -4089,7 +5343,8 @@ $(document).ready(function(){
 					var bodyoffset = { x: xoffset, y: ypos + (bodyFontSize * 5)};
 					var rubyoffset = { x: xoffset, y: ypos + (bodyFontSize * 3)};
 					drawTextLine (pageText.bodyLines[i], bodyoffset, bodyFontSize);
-					drawRubyLine (pageText.rubyLines[i], rubyoffset, bodyFontSize, rubyFontSize);
+					drawRubyLine (pageText.rubyLines[i], rubyoffset
+						, bodyFontSize, rubyFontSize);
 				}
 			} else {
 				// 縦書き
@@ -4131,7 +5386,8 @@ $(document).ready(function(){
 					var bodyoffset = {x: xpos, y: offset_y};
 					var rubyoffset = {x: xpos, y: offset_y};
 					drawTextLine (pageText.bodyLines[i], bodyoffset, bodyFontSize);
-					drawRubyLine (pageText.rubyLines[i], rubyoffset, bodyFontSize, rubyFontSize);
+					drawRubyLine (pageText.rubyLines[i], rubyoffset
+						, bodyFontSize, rubyFontSize);
 				}
 			}
 		}
@@ -4139,9 +5395,9 @@ $(document).ready(function(){
 	////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////
 	showPage = function() {
-		console.debug('showPage', gCurrentSection.page);
-		drawPage(gMainContext, gCharFontSize, gMainSize, gCurrentSection.page);
-		drawThumbPage(gCurrentSection.page);
+		console.debug('showPage', gCurrentManager.page);
+		drawPage(gMainContext, gCharFontSize, gMainSize, gCurrentManager.page);
+		drawThumbPage(gCurrentManager.page);
 	};
 
 	///////////////////////////////////////////
@@ -4153,48 +5409,40 @@ $(document).ready(function(){
 		, '目次の読み込み中...<br /><img src="{{:image}}" />');
 
 	loadIndex = function() {
-		if (getIndexPageStatus() === INDEXPAGE_NOWLOADING) {
+		if (gIndexManager.isIndexPageNowLoading()) {
 			return;
 		}
 		indexFrame.setLoadMessage($.render.loadIndexTmpl({image: ICON_LOADING2}));
-		// 
-		var prev = getIndexPageStatus();
-		setIndexPageStatus (INDEXPAGE_NOWLOADING);
-		++gLoading;
-		// .done(),.fail(),.always()は単なるregist機能で同期化機構はない
-		// .then()は同期化があり、funcが終わってから後続が発火していく
-		gSiteParser.loadIndex().then(
+		gIndexManager.load().then(
 			function (maxSectionNo) {
 				gGeneralAllNo = maxSectionNo;
 				gSiteParser.updateMaxSection(gGeneralAllNo, true);
-				setIndexPageReady();
 			},
-			function () {
-				setIndexPageStatus (prev);
+			function (error_code) {
 				indexFrame.setLoadMessage('目次の読み込みに失敗しました');
 			}
-		).always(function() {
-			// あまり同期化の意味はないが、then部分が終わってから実行
-			--gLoading;
-		});
+		);
 	};
 	////////////////////////////////////////////////////////
+
+
 	// @@ 単ページ対応済 @@
+	// @@ id化対応済 @@
 	loadNext = function() {
-		var new_page = gCurrentSection.page + gPagesPerCanvas;
-		var new_section = gCurrentSection.id;
-		if (new_page >= gTotalPages) {
-			new_page = 0;
-			new_section += 1;
+		var new_page = gCurrentManager.getNextPage();
+		var new_section = gCurrentManager.id;
+		if (new_page === null) {
+			new_page = FIRST_PAGE_NO;
+			new_section = gSiteParser.getNextSection (new_section);
 		}
 		jumpTo (new_section, new_page);
 	};
 	loadPrev = function() {
-		var new_page = gCurrentSection.page - gPagesPerCanvas;
-		var new_section = gCurrentSection.id;
-		if (new_page < 0) {
-			new_page = -1;
-			new_section -= 1;
+		var new_page = gCurrentManager.getPrevPage();
+		var new_section = gCurrentManager.id;
+		if (new_page === null) {
+			new_page = LAST_PAGE_NO;	// last page
+			new_section = gSiteParser.getPrevSection (new_section);
 		}
 		jumpTo (new_section, new_page);
 	};
@@ -4206,26 +5454,6 @@ $(document).ready(function(){
 			loadNext();
 		} else {
 			loadPrev();
-		}
-	};
-	///////////////////////////////////////////
-	// 一部ではsec !== nullがないベタ展開コードがあったが問題ないので統合
-	// 一部でstart=1で呼び出している箇所があるが謎
-	//
-	// デフォルト引数はFirefox系じゃないとサポートしてない(ECMA Script 6の仕様内)
-	// http://kangax.github.io/es5-compat-table/es6/
-	// しょうがないからまだおとなしく普通にかいておく
-	//
-	reMake = function (start) {
-		console.debug("remake pages called");
-		start = (start === undefined) ? 0 : start;
-		for (var i = start; i < sections.length; ++i) {
-			var sec = sections[i];
-			if (i in sections && sec !== false && sec !== null) {
-				console.debug("remake page:", i);
-				console.debug("param lc:", gLinesPerCanvas, gCharsPerLine);
-				sec = splitContentsBody (sec, i);
-			}
 		}
 	};
 
@@ -4277,7 +5505,7 @@ $(document).ready(function(){
 			console.debug ("lc.nchars:", lc.nchars);
 			if (true) {
 				if (gYokogaki) {
-					var dpc = (gMainSize.width / gPagesPerCanvas)
+					var dpc = (gMainSize.width / gCurrentManager.pagesPerCanvas)
 						/ (lc.nchars + gMarginLinesYokogaki);
 					console.debug ("dpc:", dpc);
 					// マージン設定は上下方向のマージンなので仮に使っている
@@ -4293,7 +5521,7 @@ $(document).ready(function(){
 					console.debug ("dpc:", dpc);
 					// ここで、page_width = (2+4)*dpi + nlines*dpi*1.7
 					// nlines = (page_width - (margin)*dpi)/(1.7*dpi)
-					var page_width = (gMainSize.width / gPagesPerCanvas);
+					var page_width = (gMainSize.width / gCurrentManager.pagesPerCanvas);
 					var nlines = (page_width - gMarginLinesYokogaki * dpc)
 						/ (dpc * gLineRatio);
 					console.debug ("nlines:", nlines);
@@ -4326,7 +5554,7 @@ $(document).ready(function(){
 	var calcRealCharFontSize = function (nCharsPerLine) {
 		var charFontSize;
 		if (gYokogaki) {
-			charFontSize = (gMainSize.width / gPagesPerCanvas)
+			charFontSize = (gMainSize.width / gCurrentManager.pagesPerCanvas)
 				/ (nCharsPerLine + gMarginLinesYokogaki);
 		} else {
 			charFontSize = gMainSize.height
@@ -4442,11 +5670,12 @@ $(document).ready(function(){
 		// 表示menu部分の文字サイズ指定部分の作り直し
 		remake_noja_charsize (gCharFontSize, gCharsPerLine, gLinesPerCanvas);
 		if (needRemake) {
-			// この場合reMakeとcurrent更新はペアじゃないといけない
+			// この場合gSectionManager.reMakeとcurrent更新はペアじゃないといけない
 			console.debug("remake pages calling");
-			// reMake()は後処理の段取りが別途必要なので要改善
-			reMake();
-			setupCurrentSectionInfo (gCurrentSection.id);
+			// gSectionManager.reMake()は後処理の段取りが別途必要なので要改善
+			gSectionManager.reMake();
+			gCurrentManager.setCurrent (gCurrentManager.id);
+			gCurrentManager.updateTotalPages(gSetting);
 			updateNavigation();
 			jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, FIRST_PAGE_NO);
 		}
@@ -4479,6 +5708,42 @@ $(document).ready(function(){
 	};
 	///////////////////////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////
+	// saveは新形式
+	// loadは旧形式対応とする
+	// 判定:
+	//   site,ncodeが2要素配列
+	//   tanpenにbool設定値があること
+	//  というオリジナルの判定を継承する
+	// 新形式を旧のじゃーで読むことはないとする
+	// (データ部は互換性を確保:AozoraEpub3で共通extract.txtを使えるように)
+	// どれが必要でどれが必要でないのかは微妙なことろなので
+	// 最低限parserが切り替えられないといけないので
+	// コンテンツのベースURLになるものは必要
+	// データ部にない
+	//   ・author: headerにいるか新たにデータ部にfieldを作るか？
+	//   ・title : title要素から取るようだ
+	// なろうの場合、ncodeはURLから取れるが
+	// ncode2はどこかコンテンツページを取らないと分からない
+	// bookmark関連等、importしたもので操作ができないほうが安全なのかもしれない
+	// import=読み専ならbaseURLがあるならncode,ncode2もいらない
+	// site,ncodeはbaseURLで代替してしまう
+	// restoreの場合はベースになるページを開いて起動されているはずなので
+	// site情報等は不要？登録コンテンツから別作品へ移動restoreだとまずい？
+	// 削除作品等の場合もあるので、
+	// restoreの場合は裏も切り替えてみて、作品があるようならlive view
+	// 削除されている場合はimport扱いのread-onlyとすべきかな？
+	//
+	//<!--
+	//@noja{7B87A1A7-2920-4281-A6D9-08556503D3E5}
+	//{
+	//"version":"1.13.826.2",
+	//"site":["http://naroufav.wkeya.com/noja/","http://naroufav.wkeya.com/noja/"],
+	//"ncode":["noja100","000100"],
+	//"general_all_no":1,
+	//"auther":"◆TkfnIljons",
+	//"tanpen":true
+	//}
+	//-->
 	// @@ 互換性のためtypoをそのまま残すか？(auther)
 	// indexPageStatusの評価部分が少しview側に依存した感じ
 	var createImportedInfoFromJSON = function (json) {
@@ -4505,7 +5770,7 @@ $(document).ready(function(){
 		// 常に短編設定値があるはず
 		// (不定長の場合はlength=nullに設定)
 		var isValidNojaHeader = true;
-		$.each({site: 2, ncode: 2, tanpen:1 }, function(name, length) {
+		$.each({site: 2, ncode: 2, tanpen:null }, function(name, length) {
 			if (!(name in json) || (length !== null && json[name].length != length)) {
 				isValidNojaHeader = false;
 				return false;	// break each loop
@@ -4516,114 +5781,28 @@ $(document).ready(function(){
 	};
 
 
-	function MinMaxRecorder() {
-		this.min = 0x7fffffff;
-		this.max = 0;
-	}
-	MinMaxRecorder.prototype = {
-		update: function (value) {
-			this.min = Math.min (this.min, value);
-			this.max = Math.max (this.max, value);
-			return this;
-		},
-	};
 
-	// dataRoot直下のdivから各download_sectionを取り出す
-	var getSectionsFromNojaDownloadSection = function (dest_sections, dataRoot) {
-		min_max_sec_no = new MinMaxRecorder();
-		dataRoot.children('div').each(function () {
-			var sec_no = parseInt(
-				$(this).attr('id').substr('noja_download_section_'.length)
-			);
-			min_max_sec_no.update(sec_no);
-			var sec = {};
-			sec.chapter_title = getText('.noja_download_chapter_title', this);
-			//
-			sec.subtitle = getText('.noja_download_subtitle', this);
-			//
-			sec._maegaki = getHtml('.noja_download_maegaki', this);
-			sec._atogaki = getHtml('.noja_download_atogaki', this);
-			sec._honbun = getHtml('.noja_download_honbun', this);
 
-			sec = splitContentsBody (sec, sec_no);
-			//
-			dest_sections[sec_no] = sec;
-		});
-		return min_sec_no;
-	};
 
-	// このあたりは通常のコンテンツ読み込み時の処理と共通化できる
-	var getColorInfoFromDownloadFile = function (info, infoRoot) {
-		info.color = infoRoot.css('color');
-		info.bgColor = infoRoot.css('background-color');
-		info.bgImage = infoRoot.css('background-image');
-		if (info.bgImage === null || info.bgImage === 'none' || info.bgImage === '') {
-			info.bgImage = null;
-		} else {
-			info.bgImage = info.bgImage
-				.match(/url\(([^\)]*)\)/)[1];
-			info.bgImage = $('<img>')
-				.attr('src', info.bgImage)
-				.bind('load', function() {showPage();})
-				.get(0);
-			info.bgColor = '#FFFFFF';
+
+	// setting省略時:gSetting
+	// with_layout省略時: true
+	// ([setting = gSetting], [with_layout = true])
+	// settingのみ省略も可能
+	var updateSettingMenuCheckbox = function (setting, with_layout) {
+		if (setting === true || setting === false) {
+			with_layout = setting;
+			setting = gSetting;
+		} else if (setting === undefined) {
+			setting = gSetting;
 		}
-	};
-
-	var replaceFullSections = function (new_sections, dataRoot) {
-		sections = new_sections;
-		$('#noja').empty().append(dataRoot);
-		gGeneralAllNo = imported_infos.generalAllNo;
-		gCurrentSection.id = imported_infos.currentSection;
-		gCurrentSection.page = 0;
-	};
-
-
-	var margeSections = function (new_section) {
-		var prev = null;
-		for (var sec_no = 1; sec_no < new_sections.length; ++sec_no) {
-			var sec_id = 'noja_download_section_' + sec_no;
-			if (sec_no in new_sections) {
-				var sec = new_sections[sec_no];
-				if (!(sec_no in sections)) {
-					// 新規なのでdivを作る
-					if (prev === null) {
-						$('#noja_download_file_main')
-							.prepend('<div id="' + sec_id + '">');
-					} else {
-						prev = prev.after('<div id="' + sec_id + '">');
-					}
-				}
-				prev = $('#' + sec_id);
-				prev.empty();
-				if (sec._maegaki !== null) {
-					prev.append('<div class="noja_download_maegaki">'
-						+ sec._maegaki + '</div>');
-				}
-				if (sec.chapter_title !== '') {
-					prev.append('<div class="noja_download_chapter_title">'
-						+ sec.chapter_title + '</div>');
-				}
-				prev.append('<div class="noja_download_subtitle">'
-					+ sec.subtitle + '</div>');
-				prev.append('<div class="noja_download_honbun">'
-					+ sec._honbun + '</div>');
-				if (sec._atogaki !== null) {
-					prev.append('<div class="noja_download_atogaki">'
-						+ sec._atogaki + '</div>');
-				}
-				sections[sec_no] = sec;
-			} else if (sec_no in sections) {
-				// 既存でnew側にはない番号の場合はprev更新だけ
-				prev = $('#' + sec_id);
-			}
+		with_layout = (with_layout === undefined) ? true : with_layout;
+		if (with_layout) {
+			// 名前がmaegaki,atogakiについてはfなし
+			$('#noja_maegaki').prop('checked', setting.fMaegaki);
+			$('#noja_atogaki').prop('checked', setting.fAtogaki);
+			$('#noja_kaigyou').prop('checked', setting.kaigyou);
 		}
-	};
-
-	var updateSettingMenuCheckbox = function (strring) {
-		$('#noja_maegaki').prop('checked', setting.fMaegaki);
-		$('#noja_atogaki').prop('checked', setting.fAtogaki);
-		$('#noja_kaigyou').prop('checked', setting.kaigyou);
 		$('#noja_autosave').prop('checked', setting.autoSave);
 		$('#noja_autorestore').prop('checked', setting.autoRestore);
 		$('#noja_olddata').prop('checked', setting.oldData);
@@ -4643,7 +5822,7 @@ $(document).ready(function(){
 	};
 
 	///////////////////////////////////////////////////////////////
-	// import/save/load関連
+	// import/save/load(restore)関連
 
 	// 例外のときの処理はこれだったが不要か？
 	// statusFrame.showMessage('(´・ω・｀)読み込みエラーが発生したよ。');
@@ -4651,7 +5830,7 @@ $(document).ready(function(){
 
 
 	nojaImport = function (htmldoc) {
-		var dfrd = new $.Deffered();
+		var dfrd = new $.Deferred();
 		if (isNetworkBusy ('読み込みするのは後にするのじゃー。')) {
 			return;
 		}
@@ -4675,9 +5854,16 @@ $(document).ready(function(){
 		var downloadFileMain = $('#noja_download_file_main', content);
 
 		imported_infos.title = content.filter('title').text();
-		getColorInfoFromDownloadFile(imported_infos, downloadFileMain);
-		var min_max_sec_no = getSectionsFromNojaDownloadSection (
-			imported_sections, downloadFileMain.children('div'));
+		downloadFileManager.parseColorTheme (imported_infos, downloadFileMain);
+		var min_max_sec_no = downloadFileManager.toDataAll (
+			imported_sections, downloadFileMain.children('div')
+			, 'noja_download_', function (secId, secData) {
+				// importするだけでsplitするのは凶悪
+				secData = splitContentsBody (secData, secId);
+				return true;
+		});
+
+
 		imported_infos.currentSection = min_max_sec_no.min;
 
 		fncLoad ('ncode', imported_infos.ncode)
@@ -4688,108 +5874,68 @@ $(document).ready(function(){
 			},
 			function() {
 				// 設定がなかったらデフォルトで作って新規保存
-				gSetting = {
-					ncode: imported_infos.ncode,
-					kaigyou: false,
-					fMaegaki: true,
-					fAtogaki:true
-				};
+				gSetting = createSettingNew (imported_infos.ncode);
 				fncSave_ncode (gSetting);
-				return $.Deffered().resolve().promise();
+				return $.Deferred().resolve().promise();
 			}
 		)
 		.then(function() {
 			// currentの設定を更新
-			gSetting.autoSave    = (gSetting.autoSave === true);
-			gSetting.autoRestore = (gSetting.autoRestore === true);
-			gSetting.oldData     = (gSetting.oldData === true);
+			validateSetting();
 		}).then(function() {
 			// imported_sectionsにデータ形式で全セクション構築
-			getSectionsFromNojaDownloadSection(imported_sections);
+			downloadFileManager.toDataAll (imported_sections
+				, downloadFileMain.children('div')
+				, 'noja_download_', function (secId, secData) {
+				// importするだけでsplitするのは凶悪
+				secData = splitContentsBody (secData, secId);
+				return true;
+			});
 			if (imported_infos.ncode !== gSiteParser.ncode) {
 				// importしたものが別のコンテンツなら
-				replaceFullSections (imported_sections, downloadFileMain);
+				gSectionManager.replaceDataBase (imported_sections);
+				downloadFileManager.replaceAll (downloadFileMain);
+				gGeneralAllNo = imported_infos.generalAllNo;
+				gCurrentManager.id = imported_infos.currentSection;
+				gCurrentManager.page = 0;
 			} else {
 				// 同一ncodeなら部分的な更新
-				margeSections (imported_section);
-
-				$('#noja_download_file_main').css({
-					color: imported_infos.color,
-					backgroundColor: imported_infos.bgColor
+				downloadFileManager.margeSections (imported_section
+					, function (secId, secData) {
+					gSectionManager.registData(secId, secData);
 				});
-				if (imported_infos.bgImage) {
-					$('#noja_download_file_main')
-						.css('background-image'
-							, 'url(' + imported_infos.bgImage + ')');
-				}
+				downloadFileManager.setColorTheme (imported_infos);
 				if (imported_infos.generalAllNo && gGeneralAllNo) {
 					gGeneralAllNo = Math.max(gGeneralAllNo, imported_infos.generalAllNo);
 				}
 			}
-			recCeateSiteParser (imported_infos);
+			reCreateSiteParser (imported_infos);
 			//
-			setIndexPageStatus (imported_infos.indexPageStatus);
+			gIndexManager.setIndexPageStatus (imported_infos.indexPageStatus);
 			$('title').text(gSiteParser.title);
-
-			setupCurrentSectionInfo (gCurrentSection.id);
+			// @@ table側は登録済なのでカレントを設定するだけでいいはず
+			gCurrentManager.setCurrent (gCurrentManager.id);
 			if (gGeneralAllNo) {
 				gSiteParser.updateMaxSection(gGeneralAllNo, true);
 			} else {
 				gGeneralAllNo = null;
-				gSiteParser.updateMaxSection(sections.length, true);
+				gSiteParser.updateMaxSection(gSectionManager.length(), true);
 			}
 			gSiteParser.rebuild_forms ();
-			updateSettingMenuCheckbox(gStrring);
+			updateSettingMenuCheckbox();
 			$('#noja').css({
 				color: gSiteParser.color,
 				backgroundColor: gSiteParser.bgColor,
 				backgroundImage: gSiteParser.bgImage
 					? 'url(' + gSiteParser.bgImage.src + ')':'none'
 			});
-			$('#noja_download_file_main').css({
-				color: '',
-				backgroundColor: '',
-				backgroundImage:''
-			});
+			downloadFileManager.resetColorTheme ();
 			dfrd.resolve ();
 		});
 		return dfrd.promise();
 	};
 	/////////////////////
 
-	var buildSaveDataContentsData = function (data, sections, startSecNo, endSecNo) {
-		startSecNo = (startSecNo === undefined) ? 1 : startSecNo;
-		endSecNo = (endSecNo === undefined) ? sections.length : endSecNo;
-
-		if (isIndexPageReady()) {
-			data.index = $('<div>')
-				.append(gSiteParser.selectNojaIndexData().clone())
-				.html();
-		}
-		// @@ 互換性のためtypoをそのまま残すか？
-		data.tanpen = isIndexPageDisable();
-		data.generalAllNo = Math.max (gGeneralAllNo, data.generalAllNo);
-		data.title = gSiteParser.title;
-		data.color = gSiteParser.color;
-		data.bgColor = gSiteParser.bgColor;
-		data.auther = gSiteParser.author;
-		data.bgImage = gSiteParser.bgImage
-			? $(gSiteParser.bgImage).attr('src') : null;
-		//セクションデータ
-		for(var i = startSecNo; i < endSecNo.length; ++i) {
-			var sec = sections[i];
-			if (sec === null || (gSetting.oldData && i in data.sections)) {
-				continue;
-			}
-			data.sections[i] = {
-				chapter_title: sec.chapter_title,
-				subtitle: sec.subtitle,
-				_maegaki: sec._maegaki,
-				_atogaki: sec._atogaki,
-				_honbun: sec._honbun
-			};
-		}
-	};
 
 	var buildSaveDataSiteInfo = function () {
 		return {
@@ -4805,7 +5951,7 @@ $(document).ready(function(){
 
 
 	var save_saveData = function () {
-		var dfrd = new $.Deffered ();
+		var dfrd = new $.Deferred ();
 		var data = buildSaveDataSiteInfo();
 		fncLoad ('saveData', gSiteParser.ncode).then(
 			function(readData) {
@@ -4813,11 +5959,11 @@ $(document).ready(function(){
 			},
 			function() {
 				// 失敗時はデフォルトデータを使って成功状態で継続処理
-				return new $.Deffered().resolve().promise();
+				return new $.Deferred().resolve().promise();
 			}
 		).then(	// 直前のthenで同期化した後の新promiseなのでalways()でいいのかも
 			function () {
-				buildSaveDataContentsData(data, sections);
+				gSectionManager.createSaveData (data);
 				fncSave('saveData', data);
 				dfrd.resolve ();
 			},
@@ -4830,9 +5976,14 @@ $(document).ready(function(){
 	};
 
 
+	// BookListItem = {
+	//  title: gSiteParser.title,
+	//  auther: gSiteParser.author,
+	//  savetime: parseInt((new Date()) / 1000),
+	// }
 	// デフォルト指定があった時は成功扱い
 	var loadGlobalBookList = function (default_data) {
-		var dfrd = new $.Deffered ();
+		var dfrd = new $.Deferred ();
 		fncLoad ('global', 'bookList').then(
 			function(data) {
 				dfrd.resolve (data);
@@ -4850,7 +6001,7 @@ $(document).ready(function(){
 
 	// 省略でグローバルなカレント値
 	// saveのI/Fがステータスを返さないので常に成功扱い
-	var saveGlobalBookList = function (data, data_id, register_data) {
+	var saveGlobalBookList = function (data, register_id, register_data) {
 		if (register_id === undefined) {
 			register_id = gSiteParser.ncode;
 		}
@@ -4862,7 +6013,7 @@ $(document).ready(function(){
 				savetime: parseInt((new Date()) / 1000),
 			};
 		}
-		var dfrd = new $.Deffered ();
+		var dfrd = new $.Deferred ();
 		data[register_id] = register_data;
 		fncSave_global ('bookList', data);
 		dfrd.resolve ();
@@ -4870,7 +6021,7 @@ $(document).ready(function(){
 	};
 
 	var deleteGlobalBookList = function (data_id) {
-		var dfrd = new $.Deffered ();
+		var dfrd = new $.Deferred ();
 		loadGlobalBookList().then(
 			function (data) {
 				delete data[data_id];
@@ -4893,7 +6044,7 @@ $(document).ready(function(){
 
 	// BookListのデータベースをRmWで更新
 	var saveUpdatedBookList = function () {
-		var dfrd = new $.Deffered ();
+		var dfrd = new $.Deferred ();
 		loadGlobalBookList({}).then(
 			function(data) {
 				// 省略でグローバルなカレント値
@@ -4907,6 +6058,8 @@ $(document).ready(function(){
 		);
 		return dfrd.promise ();
 	};
+
+
 
 	nojaSave = function (isShowMessage) {
 		isShowMessage = (isShowMessage === undefined) ? true : isShowMessage;
@@ -4922,45 +6075,22 @@ $(document).ready(function(){
 		);
 	};
 	/////////////////////
-	var restoreSections = function (sourceSections) {
-		for (var i = 1; i < sourceSections.length; ++i) {
-			var sec = sourceSections[i];
-			if (!(i in sections) && sec !== null) {
-				sections[i] = sec;
-				if (sec === null) {
-					continue;
-				}
-				sec._maegaki = ('_maegaki' in sec) ? sec._maegaki : null;
-				sec._atogaki = ('_atogaki' in sec) ? sec._atogaki : null;
-				//
-				sec = splitContentsBody (sec, i);
-				autoPagerize (sec, i);
-			}
-		}
-	};
 
 	var buildSettings = function (new_ncode) {
-		var dfrd = new $.Deffered();
+		var dfrd = new $.Deferred();
 		if (new_ncode != gSiteParser.ncode) {
 			var new_setting = gSetting;
-			sections = [];
+			gSectionManager.clear();
 			fncLoad ('ncode', new_ncode).then(
 				function(data) {
 					new_setting = data;
 				},
 				function () {
-					new_setting = {
-						ncode:    new_ncode,
-						fMaegaki: true,
-						fAtogaki: true,
-						kaigyou:  false,
-					};
-					return new $.Deffered().resolve().promise();
+					new_setting = createSettingNew (new_ncode);
+					return new $.Deferred().resolve().promise();
 				}
 			).always ( function () {
-				new_setting.autoSave    = new_setting.autoSave === true;
-				new_setting.autoRestore = new_setting.autoRestore === true;
-				new_setting.oldData     = new_setting.oldData === true;
+				validateSetting(new_setting);
 				dfrd.resolve (new_setting);
 			});
 		} else {
@@ -4972,12 +6102,7 @@ $(document).ready(function(){
 	var applySetting = function (new_setting) {
 		// @@ 互換性のためtypoをそのまま残すか？(auther)
 		gSetting = new_setting;
-		$('#noja_fMaegaki').prop('checked', gSetting.fMaegaki);
-		$('#noja_fAtogaki').prop('checked', gSetting.fAtogaki);
-		$('#noja_kaigyou').prop('checked', gSetting.kaigyou);
-		$('#noja_autosave').prop('checked', gSetting.autoSave);
-		$('#noja_autorestore').prop('checked', gSetting.autoRestore);
-		$('#noja_olddata').prop('checked', gSetting.oldData);
+		updateSettingMenuCheckbox ();
 	};
 
 
@@ -4986,13 +6111,17 @@ $(document).ready(function(){
 		if (gSiteParser.ncode != new_ncode) {
 			$('#noja_download_file_main').empty();
 		}
-		restoreSections(data.sections);
+		gSectionManager.restore (data.sections, function (secId, secData) {
+			// thisが変わってしまうのでまずいかも？
+			autoPagerize (secData, secId);
+			return true;
+		} /* , WITHOUT_OVERWRITE */);
 		if (data.tanpen) {
-			setIndexPageDisabled ();
+			gIndexManager.setIndexPageDisabled ();
 		} else if (data.index
-			&& (!isIndexPageReady() || gSiteParser.ncode != new_ncode)) {
+			&& (!gIndexManager.isIndexPageReady() || gSiteParser.ncode != new_ncode)) {
 			// 連載でindex pageがある場合
-			setIndexPageReady();
+			gIndexManager.setIndexPageReady();
 			var indexDiv = indexFrame.$div ();
 			indexDiv.html(data.index);
 			// @@ この部分は統合する
@@ -5011,7 +6140,7 @@ $(document).ready(function(){
 		gSiteParser.site2  = data.site2;
 		if (gSiteParser.ncode != new_ncode) {
 			if (!data.index) {
-				setIndexPageDisabled ();
+				gIndexManager.setIndexPageDisabled ();
 				indexFrame.clearDivContents ();
 			}
 			gSiteParser.title = data.title;
@@ -5022,16 +6151,10 @@ $(document).ready(function(){
 				gSiteParser.updateMaxSection(gGeneralAllNo, true);
 			} else {
 				gGeneralAllNo = null;
-				gSiteParser.updateMaxSection(sections.length, true);
+				gSiteParser.updateMaxSection(gSectionManager.length(), true);
 			}
 			gSiteParser.ncode = data.ncode;
-			var first_avail_section;
-			for(first_avail_section = 1;
-				first_avail_section < sections.length
-				&& sections[first_avail_section] === null;
-				++first_avail_section) {
-				// none
-			}
+			var first_avail_section = gSectionManager.minId();
 			gSiteParser.color   = data.color;
 			gSiteParser.bgColor = data.bgColor;
 			gSiteParser.bgImage = data.bgImage;
@@ -5055,7 +6178,7 @@ $(document).ready(function(){
 	};
 
 	nojaRestore = function (new_ncode, isShowMessage) {
-		var dfrd = new $.Deffered();
+		var dfrd = new $.Deferred();
 		isShowMessage = (isShowMessage === undefined) ? true : isShowMessage;
 		if (isShowMessage && isNetworkBusy ('ろーどするのは後にするのじゃー。')) {
 			dfrd.reject(true);	// pendingによるreject
@@ -5069,7 +6192,7 @@ $(document).ready(function(){
 				applySetting (new_setting);
 				restoreBookData (new_ncode, data);
 				if (gSiteParser.ncode != new_ncode) {
-					var sec_no = (first_avail_section === gCurrentSection.id)
+					var sec_no = (first_avail_section === gCurrentManager.id)
 						? CURRENT_SECTION_NO_WITH_RELOAD
 						: first_avail_section
 						;
@@ -5097,10 +6220,22 @@ $(document).ready(function(){
 		fncDeleteItem ('saveData', del_ncode);
 		deleteGlobalBookList (del_ncode);
 	};
+
+
+	/////////////////////
+	var getColorStyleTagText = function () {
+		var s = 'color: ' + gSiteParser.color + ';'
+			+ 'background-color: ' + gSiteParser.bgColor + ';'
+			;
+		if (gSiteParser.bgImage) {
+			s += 'background-image: url(' + gSiteParser.bgImage.src + ');';
+		}
+		return s;
+	};
 	/////////////////////
 	// @@ TODO @@ template化
 	// site固有情報とgenericな情報をどう分けるか？
-	createSaveData = function (min, max) {
+	var createDownloadData = function (min, max) {
 		var buffer = '<?xml version="1.0" encoding="utf-8"?>\n'
 			+ '<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml">\n'
 			+ '<!--\n'
@@ -5115,49 +6250,27 @@ $(document).ready(function(){
 		}
 		// @@ 互換性のためtypoをそのまま残すか？
 		buffer += '"auther":' + gSiteParser.author + ',\n';
-		buffer += '"tanpen":' + (isIndexPageDisable()) + '\n'
+		buffer += '"tanpen":' + (gIndexManager.isIndexPageDisable()) + '\n'
 			+ '}\n'
 			+ '-->\n'
-			+ '<head>\n'
+			;
+
+		buffer += '<head>\n'
 			+ '<title>'
 			+ $('<div>').text(gSiteParser.title).html()
 			+ '</title>\n'
 			+ '<meta charset="utf-8" />\n'
 			+ '</head>\n'
-			+ '<body>\n'
-			+ '<div>\n'
-			+ '<div id="noja_download_file_main" style="color:'
-			+ gSiteParser.color
-			+ ';background-color:' + gSiteParser.bgColor + ';'
 			;
-		if (gSiteParser.bgImage) {
-			buffer+='background-image:url('+gSiteParser.bgImage.src+');';
-		}
-		buffer+='">\n';
 
-		for (var i = min; i <= max; ++i) {
-			if (i in sections && sections[i] !== false && sections[i] !== null) {
-				var section = sections[i];
-				buffer += '<div id="noja_download_section_' + i + '">\n';
-				if (section._maegaki) {
-					buffer += '<div class="noja_download_maegaki">'
-						+ section._maegaki.replace(/\r|\n/g, '') + '</div>\n';
-				}
-				if (section.chapter_title !== '') {
-					buffer += '<div class="noja_download_chapter_title">'
-						+ $('<div>').text(section.chapter_title).html() + '</div>\n';
-				}
-				buffer += '<div class="noja_download_subtitle">'
-					+ $('<div>').text(section.subtitle).html() + '</div>\n';
-				buffer += '<div class="noja_download_honbun">'
-					+ section._honbun.replace(/\r|\n/g, '') + '</div>\n';
-				if (section._atogaki) {
-					buffer += '<div class="noja_download_atogaki">'
-						+ section._atogaki.replace(/\r|\n/g, '') + '</div>\n';
-				}
-				buffer += '</div>\n';
-			}
-		}
+		buffer += '<body>\n'
+			+ '<div>\n'
+			+ '<div id="noja_download_file_main"'
+			+ ' style="' + getColorStyleTagText() + '">\n';
+
+		gSectionManager.rangedEach (min, max, function (secId, secData) {
+			buffer += gSectionManager.toHtmlDiv (secId, secData, 'noja_download_');
+		});
 		buffer += '</div>\n'
 			+'</div>\n'
 			+'</body>\n'
@@ -5180,63 +6293,94 @@ $(document).ready(function(){
 	};
 
 
-	var buildAndShowBookList = function () {
-		fncLoad ('global', 'bookList', function (data) {
-			var list = '';
-			if (!valid(data)) {
-				list = '保存した小説はありません。';
-			} else {
-				// @@ TODO @@ 互換性のためtypoをそのまま残すか？
-				var buf = [];
-				for (var k in data) {
-					var v = data[k];
-					buf.push([k, v.title, v.auther, v.savetime]);
-				}
-				buf.sort(function(a, b){
-					if(a[3]>b[3]) return -1;
-					else if(a[3]<b[3]) return 1;
-					return 0;
-				});
-				for (var i = 0; i < buf.length; ++i) {
-					list += '<div id="noja_book_container_'+buf[i][0]
-						+'"><a id="noja_book_delete_'+buf[i][0]
-						+'" class="noja_book_delete">削除</a> <a id="noja_book_'+buf[i][0]
-						+'" class="noja_book">'+buf[i][1]
-						+'</a>　作者：'+buf[i][2]+'</div>';
-				}
-			}
-			$('#noja_booklist_view').html(
-				'<div class="noja_close_popup">'
-				+ '<a id="noja_closebv">[閉じる]</a>'
-				+ '</div>'
-				+ '<div>' + list + '</div>'
-			);
-			$('#noja_booklist_view a.noja_book').bind('click', function(){
-				nojaRestore($(this).attr('id').match(/noja_book_(.*)/)[1]);
-				popupMenu.close(); 
+	// @@ TODO @@ 互換性のためtypoをそのまま残すか？
+	var createBookListHtml = function (bookListContainer) {
+		var items = [];
+		$.each(bookListContainer, function (key, value) {
+			items.push({
+				id: key,
+				title: value.title,
+				auther: value.auther,
+				savetime: value.savetime,
 			});
-			$('#noja_booklist_view a.noja_book_delete').bind('click', function(){
-				var del_ncode = $(this).attr('id')
-					.match(/noja_book_delete_(.*)/)[1];
-				nojaDelete(del_ncode);
-				$('#noja_book_container_' + del_ncode).remove();
-				console.log($('#noja_book_container_' + del_ncode));
-			});
-			$('#noja_closebv').bind('click', function() { $('#noja_booklist_view').hide(); });
-			$('#noja_saveload').hide();
-			$('#noja_booklist_view').show();
 		});
+		// 時間でソート
+		items.sort(function(a, b) {
+			if (a.savetime > b.savetime) {
+				return -1;
+			} else if (a.savetime < b.savetime) {
+				return 1;
+			}
+			return 0;
+		});
+		var list = '';
+		$.each(items, function (index, item) {
+			list += '<div id="noja_book_container_'+item.id + '">'
+				+ '<a id="noja_book_delete_' + item.id + '"'
+				+ ' class="noja_book_delete">削除</a>'
+				+ ' <a id="noja_book_' + items.id + '"'
+				+ ' class="noja_book">'
+				+ items.title
+				+ '</a>'
+				+ '　作者：' + item.auther
+				+'</div>';
+		});
+		return list;
+	};
+
+	// booklist = [booklistItem,...]
+	// 配列のindexはnovel_id
+	var buildAndShowBookList = function () {
+		var list = '';
+		fncLoad ('global', 'bookList').then(
+			function (data) {
+				list = createBookListHtml (data);
+			},
+			function () {
+				list = '保存した小説はありません。';
+			}
+		).then(
+			function () {
+				var blv = $('#noja_booklist_view');
+				blv.html(
+					'<div class="noja_close_popup">'
+					+ '<a id="noja_closebv">[閉じる]</a>'
+					+ '</div>'
+					+ '<div>' + list + '</div>'
+				);
+				// タイトル選択した場合のハンドラを登録
+				blv.find('a.noja_book').bind('click', function() {
+					var item_id = $(this).attr('id')
+						.match(/noja_book_(.*)/)[1];
+					nojaRestore(item_id);
+					popupMenu.close(); 
+				});
+				// タイトル削除のハンドラを登録
+				blv.find('a.noja_book_delete').bind('click', function() {
+					var item_id = $(this).attr('id')
+						.match(/noja_book_delete_(.*)/)[1];
+					nojaDelete(item_id);
+					$('#noja_book_container_' + item_id).remove();
+					console.log($('#noja_book_container_' + item_id));
+				});
+				$('#noja_closebv').bind('click', function() {
+					blv.hide();
+				});
+				$('#noja_saveload').hide();
+				blv.show();
+			}
+		);
 	};
 
 	var sleepTimer = function (duration) {
-		var dfrd = new $.Deffered();
+		var dfrd = new $.Deferred();
 		setTimeout(function () {dfrd.resolve();}, duration);
 		return dfrd.promise();
 	};
 
 	var waitForNetworkReady = function (duration, retry_count) {
 		var retry = 0;
-		var dfrd = new $.Deffered();
+		var dfrd = new $.Deferred();
 		(function loop () {
 			if (isNetworkBusy()) {
 				if (++retry <= retry_count) {
@@ -5253,7 +6397,7 @@ $(document).ready(function(){
 
 	// エラーの時は？
 	var readFile = function (fileData) {
-		var dfrd = new $.Deffered();
+		var dfrd = new $.Deferred();
 		var reader = new FileReader();
 		reader.onload = function(e) {
 			dfrd.resolv (e.target.result);
@@ -5269,7 +6413,7 @@ $(document).ready(function(){
 		}
 		var fifo = [];
 		queue.push (files);
-		var dfrd = new $.Deffered();
+		var dfrd = new $.Deferred();
 		(function loop () {
 			if (dfrd.state == 'pending') {
 				if (files.length === 0) {
@@ -5286,7 +6430,7 @@ $(document).ready(function(){
 								dfrd.reject();
 							} else {
 								// resume then
-								return new $.Deffered.resolve().promise();
+								return new $.Deferred.resolve().promise();
 							}
 						}).then(null, function () {
 							// import fail
@@ -5295,7 +6439,7 @@ $(document).ready(function(){
 								dfrd.reject();
 							} else {
 								// resume then
-								return new $.Deffered.resolve().promise();
+								return new $.Deferred.resolve().promise();
 							}
 						}).then(loop);
 					}
@@ -5305,15 +6449,6 @@ $(document).ready(function(){
 		return dfrd.promise();
 	};
 
-	var findMinSectionNo = function () {
-		var sec_no;
-		for (sec_no = 1;
-			sec_no < sections.length && !(sec_no in sections);
-			++sec_no) {
-			// none
-		}
-		return sec_no;
-	};
 
 	// appのfile load関連のhandler
 	var app_fileLoadHandler = function() {
@@ -5334,9 +6469,9 @@ $(document).ready(function(){
 					showPage();
 				} else {
 					// 読み込んだ中で最も小さいsection_noを使う
-					var sec_no = findMinSectionNo();
+					var sec_no = gSectionManager.minId();
 					// たまたま同一sectionにいたのなら強制リロード
-					if (sec_no == gCurrentSection.id) {
+					if (sec_no == gCurrentManager.id) {
 						sec_no = CURRENT_SECTION_NO_WITH_RELOAD;
 					}
 					jumpTo (sec_no, FIRST_PAGE_NO);
@@ -5375,144 +6510,92 @@ $(document).ready(function(){
 		}
 
 		////////////////////////////////////////////
+		////////////////////////////////////////////
 		// initializeのstage1
 		// グローバル設定の読み込み完了後にここにくる
 		var initialize_stage1 = function() {
-			fncSave_global ('fontType', gFontType);
-			fncSave_global ('alwaysOpen', gAlwaysOpen);
-			fncSave_global ('allpage', gAllpage);
-			fncSave_global ('layout', gLayout);
-			fncSave_global ('slidePos', gSlidePos);
-
+			// 少しだけuiがらみの設定をする
 			// ページ末尾にのじゃー作業用の領域を確保
 			$('body').append(fncLsc (NOJA_VIEW_HTML));
 			// 「のじゃー」ラベルを元ページに貼り付け
-			// 位置が悪い？
-			// $('#head_nav')
-			//	.append('<li><a id="noja_open" class="menu">のじゃー縦書リーダー</a></li>');
-
-			$('#novelnavi_right')
-				.append('<a id="noja_open" style="cursor:pointer;font-size:'
-					+ FONTSMALL
-					+ '; display:block; margin-top:10px;">のじゃー縦書リーダー</a>');
+			gSiteParser.attachNoja();
 			// のじゃー作業用領域のフォントサイズ指定？
 			rootFrame.$().css('font-size', FONTSMALL);
-
 
 			// これがないと計算ができないので位置を移動
 			updateMainSize ();
 			console.debug ("gMainSize", gMainSize);
 			// 計算して出す変数の設定処理
 			updateLC(slidePos2ZoomRatio (gSlidePos), true);
-			console.debug ("gCharsPerLine, gLinesPerCanvas", gCharsPerLine, gLinesPerCanvas);
+			console.debug ("gCharsPerLine, gLinesPerCanvas"
+				, gCharsPerLine, gLinesPerCanvas);
 
 			// 基本情報を設定して次ステージへ
+			var dfrd;
 			if (noja_option.appmode) {
-				// アプリモードだと元ページは解析済なので直接stage3へ
-				noja_option.getToken(function(data) {
-					gSiteParser.token = data;
-					gSiteParser.login = (gSiteParser.token !== '');
-					initialize_stage3 ();
-				});
+				// アプリモードだと元ページは解析不要
+				// tokenを取り出すだけ
+				dfrd = noja_option.getToken().then(
+					function(token) {
+						gSiteParser.token = token;
+						gSiteParser.login = (gSiteParser.token !== '');
+					},
+					function () {
+						// 読まなかったときのことは考えないない
+					}
+				);
 			} else {
 				// ncodeをキーとして個別設定を取り出しstage2へ
-				fncLoad ('ncode', gSiteParser.ncode, initialize_stage2);
-			}
-		};
-
-		////////////////////////////////////////////
-		// initializeのstage2
-		// 非アプリモード
-		// ncodeをキーとして読み込んだ設定オブジェクトがresult引数
-		// 各小説毎の固有設定を読み込んだ後
-		// 貼り付け元ページの解析
-		var initialize_stage2 = function (result) {
-			console.debug ('initialize stage2');
-			gSetting = result;
-			if (!valid (gSetting)) {
-				gSetting = {
-					ncode:    gSiteParser.ncode,
-					kaigyou:  false,	// 改行詰め
-					fMaegaki: true,	// 前書き表示
-					fAtogaki: true	// 後書き表示
-				};
-				fncSave_ncode (gSetting);
-			}
-			///////////////////////////////////////
-			// 元ページ解析
-			if (!gSiteParser.parseInitialPage ()) {
-				// 解析失敗した場合はindex page等のじゃーが表示できない画面
-				console.debug ('not supported page');
-				return;
-			}
-			////////// menu側のcheckに状態を反映させる
-			$('#noja_maegaki').prop('checked', gSetting.fMaegaki);
-			$('#noja_atogaki').prop('checked', gSetting.fAtogaki);
-			$('#noja_kaigyou').prop('checked', gSetting.kaigyou);
-			$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a')
-				.attr('data-noja', gCurrentSection.id);
-			initialize_stage3();
-		};
-
-
-		///////////////////////////////////////////////
-		// 多分抜き出しても大丈夫だと思うが変数束縛はチェックしていない
-		var rebuild_appmode_menu = function () {
-			$('#noja_link')
-				.empty()
-				.append(
-					$('<div style="text-align:right; border-bottom-width:1px; border-bottom-style:solid;">'
-					+ '<a id="noja_closelink">[閉じる]</a>'
-					+ '</div>'
-					).bind('click', function() { $('#noja_link').hide(); })
-				);
-			$('#noja_import_container')
-				.html('<h4>読み込み</h4>'
-				+ '<div id="noja_file_back">'
-				+ '<input id="noja_file" type="file" value="" accept="text/html, application/zip" multiple="true" >'
-				+ '</div>'
-				+ '<br /><br /><a id="noja_yomikomi">保存・読み込み機能について</a>'
-				);
-			$('#noja_saveload_container')
-				.append('<br /><a id="noja_booklist">保存した小説リスト</a>');
-			$('#noja_version')
-				.append('<br /><br /><a id="noja_kokuhaku">関係のない話</a>');
-			$('#noja_booklist').bind('click', function() {
-				buildAndShowBookList();
-			});
-			$('#noja_file').bind('change', app_fileLoadHandler());
-			//
-			var app_builtin_content_load_handler = function (res) {
-				nojaImport(fncLsc (res)).then(
-					function() {
-						jumpTo ((gCurrentSection.id == FIRST_SECTION_NO)
-							? CURRENT_SECTION_NO_WITH_RELOAD
-							: FIRST_SECTION_NO
-							, FIRST_PAGE_NO);
+				dfrd = fncLoad ('ncode', gSiteParser.ncode).then(
+					function (setting) {
+						// ncodeをキーとして読み出した設定をストア
+						gSetting = setting;
+					},
+					function () {
+						// 個別設定がないならデフォルトを作って設定
+						setSetting(createSettingNew(gSiteParser.ncode));
+						// resolveに状態を変えて継続
+						return new $.Deferred().resolve().promise();
 					}
-					// format mismatchでエラーが出ることはあるが無視
+				).then(
+					function () {
+						// menu側のcheckに状態を反映させる
+						$('#noja_maegaki').prop('checked', gSetting.fMaegaki);
+						$('#noja_atogaki').prop('checked', gSetting.fAtogaki);
+						$('#noja_kaigyou').prop('checked', gSetting.kaigyou);
+					}
+				).then(
+					function () {
+						// 元ページ解析
+						if (!gSiteParser.parseInitialPage ()) {
+							// 解析失敗した場合はindex page等のじゃーが表示できない画面
+							console.debug ('not supported page');
+							// rejectに状態を変えて継続
+							return new $.Deferred().reject().promise();
+						}
+					}
 				);
-			};
-			$('#noja_yomikomi').bind('click', function(){
-				app_builtin_content_load_handler (noja_option.app_yomikomi_setumei);
-			});
-			$('#noja_kokuhaku').bind('click', function(){
-				app_builtin_content_load_handler (noja_option.app_kokuhaku);
-			});
+			}
+			dfrd.then (
+				// 成功のときは次ステージへ
+				initialize_stage3,
+				function () {
+					// 失敗のときは次ステージに行かずに終了
+				}
+			);
 		};
+
 		///////////////////////////////////////////////
-		// アプリモードと共通のstage3
+		///////////////////////////////////////////////
+		// メニュー関連の設定やイベントハンドラ等UIがらみの設定が中心
 		// 設定したりないメニュー関連等を設定する
 		var initialize_stage3 = function() {
 			console.debug ('initialize stage3');
-			gSetting.autoSave    = gSetting.autoSave === true;
-			gSetting.autoRestore = gSetting.autoRestore === true;
-			gSetting.oldData     = gSetting.oldData === true;
-			gNextSection         = gCurrentSection.id;
-			gSiteParser.updateMaxSection (gCurrentSection.id, true);
-			$('#noja_autosave').prop('checked', gSetting.autoSave);
-			$('#noja_autorestore').prop('checked', gSetting.autoRestore);
-			$('#noja_olddata').prop('checked', gSetting.oldData);
+			validateSetting ();
+			gLoadSectionInfo.set (gCurrentManager.id, 0);
+			gSiteParser.updateMaxSection (gCurrentManager.id, true);
+			updateSettingMenuCheckbox (false);
+
 			$('#noja_always_open').prop('checked', gAlwaysOpen);
 			$('#noja_layout').prop('checked', gLayout);
 			$('#noja_mincho').prop('checked', gFontType === FONTTYPE_MINCHO);
@@ -5537,9 +6620,9 @@ $(document).ready(function(){
 				if (e.clientY < 10) {
 					// menu popup
 					menuFrame.show();
-				} else if (!isIndexPageDisable() && e.clientX < 10) {
+				} else if (!gIndexManager.isIndexPageDisable() && e.clientX < 10) {
 					// 目次slide slider
-					if (isIndexPageNotReady()) {
+					if (gIndexManager.isIndexPageNotReady()) {
 						loadIndex();
 					}
 					indexFrame.show ();
@@ -5576,8 +6659,8 @@ $(document).ready(function(){
 					// 最終話の最終ページ
 					if ($('#noja_hyouka').css('display') != 'none'
 						&& isForward
-						&& gCurrentSection.id === gGeneralAllNo
-						&& isLastPageInSection(gCurrentSection.page)
+						&& gCurrentManager.id === gGeneralAllNo
+						&& gCUrrentManager.isLastPage ()
 						) {
 						return;
 					}
@@ -5594,7 +6677,76 @@ $(document).ready(function(){
 			$('#noja_main').get(0).addEventListener('DOMMouseScroll', function(e) {
 				mouseWheelHandler(-e.detail);	// 移動量がFirefox以外とは逆
 			});
-			var joutai = null;
+			// 前書き後書きのモード変更
+			var MaegakiAtogakiModeController = (function () {
+				var statefMaegakifAtogaki = null;
+				return {
+					toggle: function () {
+						if (gSetting.fMaegaki && gSetting.fAtogaki) {
+							gSetting.fMaegaki = false;
+							gSetting.fAtogaki = false;
+						} else if (statefMaegakifAtogaki) {
+							gSetting.fMaegaki = statefMaegakifAtogaki.fMaegaki;
+							gSetting.fAtogaki = statefMaegakifAtogaki.fAtogaki;
+							statefMaegakifAtogaki = null;
+						} else {
+							if (gSetting.fMaegaki !== gSetting.fAtogaki) {
+								statefMaegakifAtogaki = {
+									fMaegaki: gSetting.fMaegaki,
+									fAtogaki: gSetting.fAtogaki
+								};
+								gSetting.fMaegaki = true;
+								gSetting.fAtogaki = true;
+							}
+						}
+						// 前書き後書き表示を変更したのでreload
+						jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, FIRST_PAGE_NO);
+						fncSave_ncode (gSetting);
+						statusFrame.showMessage('前書き表示：'
+							+ (gSetting.fMaegaki ? 'ON' : 'OFF')
+							+'　後書き表示：'+(gSetting.fAtogaki ? 'ON' : 'OFF'));
+					},
+					changeMaegaki: function (value) {
+						statefMaegakifAtogaki = null;
+						setSettingFMaegaki (value);
+						if (gCurrentManager.hasMaegaki()) {
+							var pageMap = gCurrentManager.getPageMap(gSetting);
+							if (gSetting.fMaegaki) {
+								// disable->enableなのでページ位置が前書き分増える
+								jumpTo (CURRENT_SECTION_NO_WITH_RELOAD
+									, gCurrentManager.page + pageMap.maegaki.size);
+							} else {
+								// enable->disableなのでページ位置が前書き分減る
+								// 前書き内にいた場合は0とのmaxで0になり先頭へ
+								jumpTo (CURRENT_SECTION_NO_WITH_RELOAD
+									, Math.max(FIRST_PAGE_NO
+									, gCurrentManager.page - pageMap.maegaki.size)
+								);
+							}
+						}
+					},
+					changeAtogaki: function (value) {
+						statefMaegakifAtogaki = null;
+						setSettingFAtogaki (value);
+						// 後書きがあるセクションでのみview変化がある
+						if (gCurrentManager.hasAtogaki()) {
+							var pageNo = gCurrentManager.page;
+							var pageMap = gCurrentManager.getPageMap(gSetting);
+							// 後書きON->OFFの場合は後書き部にいた場合は補正がいる
+							// OFF->ONの場合は影響がない
+							if (!gSetting.fAtogaki) {
+								if (pageNo >= pageMap.end) {
+									pageNo = pageMap.end - 1;
+								}
+							}
+							jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, pageNo);
+						}
+					},
+				};
+			})();
+
+
+
 			$(window).bind('resize', onResize).bind('keydown', function(e) {
 				var VK_R = 82;
 				var VK_S = 83;
@@ -5641,103 +6793,57 @@ $(document).ready(function(){
 					load_next_direction (false, true);
 					break;
 				case VK_UP:
-					jumpTo (gCurrentSection.id - 1, FIRST_PAGE_NO);
+					jumpTo (gSiteParser.getPrevSection(gCurrentManager.id)
+						, FIRST_PAGE_NO);
 					break;
 				case VK_DOWN:
-					//console.debug('gCurrentSection.id', gCurrentSection.id);
-					jumpTo (gCurrentSection.id + 1, FIRST_PAGE_NO);
+					//console.debug('gCurrentManager.id', gCurrentManager.id);
+					jumpTo (gSiteParser.getNextSection(gCurrentManager.id)
+						, FIRST_PAGE_NO);
 					break;
 				case VK_PAGEUP:
 				case VK_HOME:
 					// 現在のsectionの先頭
-					jumpTo (gCurrentSection.id, FIRST_PAGE_NO);
+					jumpTo (gCurrentManager.id, FIRST_PAGE_NO);
 					break;
 				case VK_PAGEDOWN:
 				case VK_END:
 					// 現在のsectionの最終
-					jumpTo (gCurrentSection.id, LAST_PAGE_NO);
+					jumpTo (gCurrentManager.id, LAST_PAGE_NO);
 					break;
 				case VK_ESC:
 					nojaClose();
 					break;
 				case VK_SPACE:
 					// 前書き後書き表示をtoggle disable,enable,restore
-					if (gSetting.fMaegaki && gSetting.fAtogaki) {
-						$('#noja_maegaki').prop('checked', gSetting.fMaegaki = false);
-						$('#noja_atogaki').prop('checked', gSetting.fAtogaki = false);
-					} else if (joutai) {
-						$('#noja_maegaki').prop('checked', gSetting.fMaegaki = joutai.m);
-						$('#noja_atogaki').prop('checked', gSetting.fAtogaki = joutai.a);
-						joutai = null;
-					} else {
-						if (gSetting.fMaegaki !== gSetting.fAtogaki) {
-							joutai = {
-								m: gSetting.fMaegaki,
-								a: gSetting.fAtogaki
-							};
-							$('#noja_maegaki').prop('checked', gSetting.fMaegaki = true);
-							$('#noja_atogaki').prop('checked', gSetting.fAtogaki = true);
-						}
-					}
-					// 前書き後書き表示を変更したのでreload
-					jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, FIRST_PAGE_NO);
-					fncSave_ncode (gSetting);
-					statusFrame.showMessage('前書き表示：'
-						+ (gSetting.fMaegaki ? 'ON' : 'OFF')
-						+'　後書き表示：'+(gSetting.fAtogaki ? 'ON' : 'OFF'));
+					MaegakiAtogakiModeController.toggle ();
+					// menu側に反映
+					$('#noja_maegaki').prop('checked', gSetting.fMaegaki);
+					$('#noja_atogaki').prop('checked', gSetting.fAtogaki);
 					break;
 				default:
 					return;
 				}
 				e.preventDefault();
 			});
+			/////////////////////////////////////////////////
 			////// menu関連のcheckbox等
+
 			$('#noja_maegaki').bind('click', function() {
-				joutai = null;
-				gSetting.fMaegaki = $(this).prop('checked');
-				fncSave_ncode (gSetting);
-				if (gCurrentSection.maegaki !== null) {
-					if (gSetting.fMaegaki) {
-						// disable->enableなのでページ数が前書き分増える
-						jumpTo (CURRENT_SECTION_NO_WITH_RELOAD
-							, gCurrentSection.page + gCurrentSection.maegaki[0].length);
-					} else {
-						// enable->disableなのでページ数が前書き分減る
-						// 前書き内にいた場合は0で先頭へ
-						jumpTo (CURRENT_SECTION_NO_WITH_RELOAD
-							, Math.max(FIRST_PAGE_NO
-							, gCurrentSection.page - gCurrentSection.maegaki[0].length));
-					}
-				}
+				MaegakiAtogakiModeController.changeMaegaki ($(this).prop('checked'));
 			});
 			$('#noja_atogaki').bind('click', function() {
-				joutai = null;
-				gSetting.fAtogaki = $(this).prop('checked');
-				fncSave_ncode (gSetting);
-				if (gCurrentSection.atogaki !== null) {
-					var pgno = gCurrentSection.page;
-					if (!gSetting.fAtogaki) {
-						var len = gCurrentSection.honbun[0].length;
-						if (gSetting.fMaegaki && gCurrentSection.maegaki !== null) {
-							len += gCurrentSection.maegaki[0].length;
-						}
-						if (pgno >= len) {
-							pgno = len - 1;
-						}
-					}
-					jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, pgno);
-				}
+				MaegakiAtogakiModeController.changeAtogaki ($(this).prop('checked'));
 			});
 			$('#noja_layout').bind('click', function() {
-				gLayout = $(this).prop('checked');
-				fncSave_global ('layout', gLayout);
-				reMake();	// nullcheckが入ってないがほぼ同じなので統合
+				setGlobalLayout ($(this).prop('checked'));
+				gSectionManager.reMake();	// nullcheckが入ってないがほぼ同じなので統合
 				// レイアウト変更の場合はページ位置は移動しなくてOk?
-				jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, gCurrentSection.page);
+				jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, gCurrentManager.page);
 			});
 
 			var fontChangeHandler = function (font_type) {
-				setFontType (font_type, true);
+				setGlobalFontType (font_type);
 				gMainContext.font = get_canvas_font (gCharFontSize);
 				showPage();
 			};
@@ -5748,87 +6854,100 @@ $(document).ready(function(){
 				fontChangeHandler(FONTTYPE_GOTHIC);
 			});
 			$('#noja_kaigyou').bind('click', function() {
-				gSetting.kaigyou = $(this).prop('checked');
-				fncSave_ncode (gSetting);
-				reMake();
+				setSettingKaigyou ($(this).prop('checked'));
+				gSectionManager.reMake();
 				jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, FIRST_PAGE_NO);
 			});
+
+
 			$('#noja_always_open').bind('click', function() {
-				gAlwaysOpen = $(this).prop('checked');
-				fncSave_global ('alwaysOpen', gAlwaysOpen);
+				setGlobalAlwaysOpen ($(this).prop('checked'));
 			});
 			$('#noja_autosave').bind('click', function() {
-				gSetting.autoSave = $(this).prop('checked');
-				fncSave_ncode (gSetting);
+				setSettingAutoSave ($(this).prop('checked'));
 			});
 			$('#noja_autorestore').bind('click', function() {
-				gSetting.autoRestore = $(this).prop('checked');
-				fncSave_ncode (gSetting);
+				setSettingAutoRestore ($(this).prop('checked'));
 			});
 			$('#noja_olddata').bind('click', function() {
-				gSetting.oldData = $(this).prop('checked');
-				fncSave_ncode (gSetting);
+				setSettingOldData ($(this).prop('checked'));
 			});
 			$('#noja_allpage').bind('click', function() {
-				gAllpage = $(this).prop('checked');
+				setGlobalAllpage ($(this).prop('checked'));
 				showPage();
-				fncSave_global ('allpage', gAllpage);
 			});
 			$('#noja_yokogaki').bind('click', function() {
-				gYokogaki = $(this).prop('checked');
+				setGlobalYokogaki($(this).prop('checked'));
 				updateLC(slidePos2ZoomRatio (gSlidePos), true);
 				// @@ 入れ替えてみるべきかも？ @@
-				reMake();
+				gSectionManager.reMake();
 				onResize();
 				jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, FIRST_PAGE_NO);
-				fncSave_global ('yokogaki', gYokogaki);
 			});
 			///////// フォントサイズスライダー /////////
-			var dragging = false;
-			var span;
-			$('#noja_drag').bind('mousedown', function(e) {
-				dragging = true;
-				span = e.clientX-$('#noja_drag').offset().left-5;
-			});
-			$(document).bind('mouseup', function(){
-				if (dragging) {
-					dragging = false;
-					// [0.083... , 200.083..]が実測値
-					gSlidePos = $('#noja_drag').offset().left
-						+ 4 - $('#noja_dragback').offset().left;
-					updateLC(slidePos2ZoomRatio (gSlidePos), true);
-					fncSave_global ('slidePos', gSlidePos);
-					// cacheをpurgeして再構築
-					// ほぼreMake()だが判定がちょい単純化されているのが謎
-					// (null checkがない)
-					// startが1なのも違う
-					reMake(1);	// 開始が1になっているのが謎な部分
-					onResize();
-					jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, FIRST_PAGE_NO);
-				}
-			});
-			$(document).bind('mousemove', function(e){
-				if (dragging) {
-					var left = e.clientX;
-					// マウス座標とスライダーの位置関係で値を決める
-					var value = e.clientX-$('#noja_dragback').offset().left-span;
-					// スライダーからはみ出したとき
-					if (value < 0) {
-						value = 0;
-					} else if (value > $('#noja_dragback').width()) {
-						value = $('#noja_dragback').width();
+			// ui widget部分とlogicを分離
+			var fontSizeSliderProgressHandler = function (slidePos) {
+				var lc = updateLC(slidePos2ZoomRatio (slidePos), false);
+				remake_noja_charsize (calcRealCharFontSize (lc.nchars)
+					, lc.nchars, lc.nlines);
+			};
+			var fontSizeSliderDoneHandler = function (slidePos) {
+				setGlobalSlidePos (slidePos);
+				updateLC(slidePos2ZoomRatio (gSlidePos), true);
+				// cacheをpurgeして再構築
+				// ほぼgSectionManager.reMake()だが判定がちょい単純化されているのが謎
+				// (null checkがない)
+				// startが1なのも違う
+				gSectionManager.reMake();	// 開始が1になっているのが謎な部分
+				onResize();
+				jumpTo (CURRENT_SECTION_NO_WITH_RELOAD, FIRST_PAGE_NO);
+			};
+			// widget部分
+			(function (drag, dragback, bar_width) {
+				var dragging = false;
+				var span;
+				var w = bar_width;
+				var saturate = function (value, minmax) {
+					if (value < minmax.min) {
+						value = minmax.min;
+					} else if (value > minmax.max) {
+						value = minmax.max;
 					}
-					$('#noja_drag').css('left', value - 5);
-					var lc = updateLC(slidePos2ZoomRatio (value), false);
-					remake_noja_charsize (calcRealCharFontSize (lc.nchars)
-						, lc.nchars, lc.nlines);
-				}
-			});
+					return value;
+				};
+				$(drag).bind('mousedown', function(e) {
+					dragging = true;
+					span = e.clientX - $(drag).offset().left - w;
+				});
+				$(document).bind('mouseup', function(){
+					if (dragging) {
+						dragging = false;
+						// [0.083... , 200.083..]が実測値
+						var slidePos = $(drag).offset().left + w - 1
+							- $(dragback).offset().left;
+						fontSizeSliderDoneHandler (slidePos);
+					}
+				});
+				$(document).bind('mousemove', function(e) {
+					if (dragging) {
+						var left = e.clientX;
+						// マウス座標とスライダーの位置関係で値を決める
+						var slidePos = e.clientX - $(dragback).offset().left - span;
+						// スライダー値を補正
+						slidePos = saturate (slidePos
+							, {min: 0, max: $(dragback).width()});
+						$(drag).css('left', slidePos - w);
+						fontSizeSliderProgressHandler (slidePos);
+					}
+				});
+			})('#noja_drag', '#noja_dragback', 5);
 			////////////////
 			// 更新link
 			indexFrame.$updateAnchor().bind('click', loadIndex);
-			//
-			var adjusting_menu_open_handler = function (menu, menu_open) {
+
+			/////////////////////////////////////////
+			// このあたりはメニュー項目
+			var adjusting_menu_open_handler = function (menu_open, menu) {
 				popupMenu.toggle (menu);
 				var left = $(menu_open).offset().left;
 				var width = $(menu).width();
@@ -5841,109 +6960,102 @@ $(document).ready(function(){
 					top: menuFrame.height()
 				});
 			};
+			var createCloseHandler = function (selector) {
+				return function () {
+					$(selector).hide();
+				};
+			};
 
-			$('#noja_openconfig').bind('click', function() {
-				adjusting_menu_open_handler ('#noja_config', '#noja_openconfig');
+			var createToggleHandler = function (selector) {
+				return function () {
+					popupMenu.toggle (selector);
+				};
+			};
+
+			$.each({
+				'#noja_openconfig':  '#noja_config',
+				'#noja_openconfig2': '#noja_config2',
+				'#noja_openlink':    '#noja_link',
+			}, function (click_target_selector, open_target_selector) {
+				$(click_target_selector).bind('click', function() {
+					adjusting_menu_open_handler (click_target_selector
+						, open_target_selector);
+				});
 			});
-			$('#noja_openconfig2').bind('click', function() {
-				adjusting_menu_open_handler ('#noja_config2', '#noja_openconfig2');
+
+			$.each({
+				'#noja_opensaveload': '#noja_saveload',
+				'#noja_openhelp':     '#noja_help',
+				'#noja_openversion':  '#noja_version',
+				'#noja_openhyouka':   '#noja_hyouka',
+			}, function (click_target_selector, toggle_target_selector) {
+				$(click_target_selector).bind('click'
+					, createToggleHandler (toggle_target_selector)
+				);
 			});
-			$('#noja_closeconfig').bind('click', function() {
-				$('#noja_config').hide();
+
+			// 命名規則がイレギュラーなものが一つだけある
+			// 全部もっと規則的な名前にすべきかも
+			// foo_close -> foo
+			// あるいは構造が$(this).parent().hide()
+			// で済むならそのほうが完全共通ハンドラになり機能的
+			$.each({
+				'#noja_closeconfig':   '#noja_config',
+				'#noja_closeconfig2':  '#noja_config2',
+				'#noja_closesaveload': '#noja_saveload',
+				'#noja_closelink':     '#noja_link',
+				'#noja_closehelp':     '#noja_help',
+				'#noja_closeversion':  '#noja_version',
+				'#noja_closehyouka':   '#noja_hyouka',
+				'#noja_closedv':       '#noja_download_view',
+			}, function (click_target_selector, close_target_selector) {
+				$(click_target_selector).bind('click'
+					, createCloseHandler(close_target_selector)
+				);
 			});
-			$('#noja_closeconfig2').bind('click', function() {
-				$('#noja_config2').hide();
-			});
-			$('#noja_opensaveload').bind('click', function() {
-				popupMenu.toggle ('#noja_saveload');
-			});
-			$('#noja_closesaveload').bind('click', function() {
-				$('#noja_saveload').hide();
-			});
-			$('#noja_openlink').bind('click', function() {
-				adjusting_menu_open_handler ('#noja_link', '#noja_openlink');
-			});
-			$('#noja_closelink').bind('click', function() {
-				$('#noja_link').hide();
-			});
-			$('#noja_openhelp').bind('click', function() {
-				popupMenu.toggle ('#noja_help');
-			});
-			$('#noja_closehelp').bind('click', function() {
-				$('#noja_help').hide();
-			});
-			$('#noja_openversion').bind('click', function() {
-				popupMenu.toggle ('#noja_version');
-			});
-			$('#noja_closeversion').bind('click', function() {
-				$('#noja_version').hide();
-			});
-			$('#noja_openhyouka').bind('click', function() {
-				popupMenu.toggle ('#noja_hyouka');
-			});
-			$('#noja_closehyouka').bind('click', function() {
-				$('#noja_hyouka').hide();
-			});
-			$('#noja_closedv').bind('click', function() {
-				$('#noja_download_view').hide();
-			});
+
 			$('#noja_save').bind('click', function() {
 				nojaSave();
 			});
 			$('#noja_restore').bind('click', function() {
 				nojaRestore(gSiteParser.ncode);
 			});
-			$('#noja_download').bind('click', function() {
+
+			// @@ TODO @@ start,endの概念が1～maxに依存している
+			var createDownloadLink = function (start, end, suffix) {
+				return $('<a>').attr({
+					url: URL.createObjectURL(createDownloadData(start, end)),
+					download: gSiteParser.title + suffix + '.noja.html',
+				}).get(0);
+			};
+
+			var handle_DownloadDispatchHandler = function (start, end, suffix) {
+				suffix = (suffix === undefined || suffix === null) ? '' : suffix;
 				var evt = document.createEvent('MouseEvents');
 				evt.initMouseEvent('click', true, true, window
 					, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
-				$('<a>')
-					.attr({
-						href: URL.createObjectURL(createSaveData(1, sections.length - 1)),
-						download: gSiteParser.title + '.noja.html'
-					})
-					.get(0)
-					.dispatchEvent(evt);
+				createDownloadLink(start, end, suffix).dispatchEvent(evt);
+			};
+
+			$('#noja_download').bind('click', function() {
+				handle_DownloadDispatchHandler (1, gSectionManager.length() - 1);
 			});
 			$('#noja_download2').bind('click', function() {
-				var evt = document.createEvent('MouseEvents');
-				evt.initMouseEvent('click', true, true, window
-					, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
-				var datetime_now = (function () {
-					var w2 = function (i) {
-						return (i < 10) ? '0' + i : '' + i;
-					};
-					var dt = new Date ();
-					var Y = dt.getFullYear ();
-					var M = w2 (dt.getMonth () + 1);
-					var D = w2 (dt.getDate ());
-					var h = w2 (dt.getHours ());
-					var m = w2 (dt.getMinutes ());
-					var s = w2 (dt.getSeconds ());
-					return '' + Y + '-' + M + '-' + D + ' ' + h + '-' + m + '-' + s;
-				})();
-				$('<a>')
-					.attr({
-						href: URL.createObjectURL(createSaveData(1, sections.length-1)),
-						download: gSiteParser.title+'(' + datetime_now + ').noja.html',
-					})
-					.get(0)
-					.dispatchEvent(evt);
+				handle_DownloadDispatchHandler (1, gSectionManager.length() - 1
+					, '(' + getDateTimeNow() + ')');
 			});
 			$('#noja_download3').bind('click', function() {
 				$('#noja_dv_main').empty();
-				for (var i = 1; i < sections.length; ++i) {
-					if (i in sections) {
-						$('#noja_dv_main')
-							.append(
-								$('<a>').attr({
-									href: URL.createObjectURL(createSaveData(i, i)),
-									download: gSiteParser.title+' - '+i+' - '+sections[i].subtitle
-										+'.noja.html'
-								}).html(''+i+'. '+sections[i].subtitle)
-							).append('<br>');
-					}
-				}
+				// @@ TODO @@ secIdが話数番号ではないものの検討
+				gSectionManager.each(function (secId, secData) {
+					$('#noja_dv_main')
+						.append(
+							createDownloadLink(secId, secId, 
+									+ ' - ' + secId + ' - '
+									+ secData.subtitle
+							).html('' + secId + '. ' + secData.subtitle)
+						).append('<br>');
+				});
 				popupMenu.close();
 				$('#noja_download_view').show();
 			});
@@ -5964,19 +7076,12 @@ $(document).ready(function(){
 					$('#noja_r_fc').show();
 				});
 			//////////////////////////////////////////////
+			// サイト毎のメニュー再構築
+			gSiteParser.customizeMenu ();
 			//////////////////////////////////////////////
-			// appmodeならlink部分は作り直し
-			//////////////////////////////////////////////
-			if (noja_option.appmode) {
-				rebuild_appmode_menu ();
-			}
-			//////////////////
-			// 次stageへのchain: appmodeだとコンテンツ読み込み経由の非同期
-			var dfrd = null;
-			if (noja_option.appmode) {
-				dfrd = nojaImport (fncLsc (noja_option.app_setumei));
-			}
-			$.when(dfrd).then(
+			// 次stageへのchain: 非同期 Deferred interface
+			// アプリモードだとコンテンツ読み込み等
+			gSiteParser.importInitialContents().then(
 				initialize_stage4
 				// format mismatchでエラーが出ることはあるが無視
 			);
@@ -5984,8 +7089,10 @@ $(document).ready(function(){
 
 		///////////////////////////////////////////////////////////
 		///////////////////////////////////////////////////////////
+		// 初期化完了手前の最終段階
 		var initialize_stage4 = function() {
 			console.debug('stage4: updateNavigation');
+			gCurrentManager.updateTotalPages(gSetting);
 			updateNavigation();
 			console.debug('stage4: build reputation form');
 			gSiteParser.buildReputationForm ();
@@ -5994,8 +7101,8 @@ $(document).ready(function(){
 			console.debug('stage4: onResize');
 			onResize();
 			// ある条件のときのみ非同期になるなら
-			// $.Deffered().resolve().promise()を入れるよりも
-			// $.when()にdeffered,promiseでないものを与えた時の
+			// $.Deferred().resolve().promise()を入れるよりも
+			// $.when()にDeferred,promiseでないものを与えた時の
 			// 即時resolveとして扱う仕様を使うほうがいいか？
 			var dfrd = null;	// as resolved immediately
 			if (gSetting.autoRestore) {
@@ -6009,14 +7116,9 @@ $(document).ready(function(){
 					if (gAlwaysOpen) {
 						rootFrame.$().ready(nojaOpen());
 					}
-					initialize_stage5();
+					gSiteParser.startAsyncProcess();
 				}
 			);
-		};
-		///////////////
-		// 暁のindex等勝手に動いて欲しいasyncなものを起動させる
-		var initialize_stage5 = function() {
-			gSiteParser.startAsyncProcess();
 		};
 
 		///////////////////////////////////////////////////////
@@ -6026,6 +7128,7 @@ $(document).ready(function(){
 				var buf1 = {};
 				var buf2 = {};
 				var buf3 = [];
+				var re = /(noja)_([^_]*)_(fMaegaki|fAtogaki|kaigyou)/;
 				for(var i = 0; i < ls.length; ++i) {
 					var k = ls.key(i);
 					var v = ls.getItem(k);
@@ -6036,17 +7139,17 @@ $(document).ready(function(){
 					case 'noja_fontType':   buf1.fontType   = v; break;
 					case 'noja_slidePos':   buf1.slidePos   = parseInt(v); break;
 					default:
-						k.match(/(noja)_([^_]*)_(fMaegaki|fAtogaki|kaigyou)/);
-						if (RegExp.$1 === 'noja') {
-							if (RegExp.$2 === 'undefined' || RegExp.$2 === 'novelview') {
+						var m = re.exec(k);
+						if (m) {
+							if (m[2] === 'undefined' || m[2] === 'novelview') {
 								break;
 							}
-							if (!(RegExp.$2 in buf2)) {
-								buf2[RegExp.$2] = {
-									ncode: RegExp.$2
+							if (!(m[2] in buf2)) {
+								buf2[m[2]] = {
+									ncode: m[2]
 								};
 							}
-							buf2[RegExp.$2][RegExp.$3] = (v === true);
+							buf2[m[2]][m[3]] = (v === true);
 						} else {
 							continue;
 						}
@@ -6065,7 +7168,7 @@ $(document).ready(function(){
 			}
 		})(noja_option.localStorage);
 
-		// deffered化済
+		// Deferred化済
 		$.when(
 			fncLoad ('global', 'fontType')
 			, fncLoad ('global', 'alwaysOpen')
@@ -6075,13 +7178,25 @@ $(document).ready(function(){
 			, fncLoad ('global', 'slidePos')
 		).then (
 			function (fontType, alwaysOpen, allpage, yokogaki, layout,slidePos) {
-				setFontType (fontType);
-				gAlwaysOpen = (noja_option.appmode)
-					? (alwaysOpen !== false) : (alwaysOpen === true);
-				gAllpage = (allpage === true);
-				gYokogaki = (yokogaki === true);
-				gLayout = (layout === true);
-				gSlidePos = (!valid(slidePos)) ? 100 : slidePos;
+				setGlobalFontType (fontType, WITHOUT_SAVE);
+				setGlobalAlwaysOpen (validateBool(alwaysOpen
+					, gSiteParser.alwaysOpenDefault), WITHOUT_SAVE);
+				setGlobalAllpage (validateBool(allpage, false), WITHOUT_SAVE);
+				setGlobalYokogaki (validateBool(yokogaki, false), WITHOUT_SAVE);
+				setGlobalLayout (validateBool(layout, false), WITHOUT_SAVE);
+				setGlobalSlidePos ((!valid(slidePos)) ? 100 : slidePos, WITHOUT_SAVE);
+			},
+			function () {
+				// 読めなかった時は？
+			}
+		).then(
+			function () {
+				// 何故か横書きだけは保存してなかった
+				fncSave_global ('fontType', gFontType);
+				fncSave_global ('alwaysOpen', gAlwaysOpen);
+				fncSave_global ('allpage', gAllpage);
+				fncSave_global ('layout', gLayout);
+				fncSave_global ('slidePos', gSlidePos);
 			},
 			function () {
 				// 読めなかった時は？
