@@ -21,7 +21,7 @@ $(document).ready(function(){
 			= extensions.get('{7B87A1A7-2920-4281-A6D9-08556503D3E5}');
 		if (extension.firstRun) {
 			gBrowser.selectedTab
-				= gBrowser.addTab( 'chrome://noja/content/app/index.html');
+				= gBrowser.addTab('chrome://noja/content/app/index.html');
 			navBar.append(button).attr('currentset', navBar.prop('currentSet'));
 			document.persist('nav-bar', 'currentset');
 		}
@@ -73,7 +73,9 @@ var onPageLoad = function(e) {
 		/chrome:\/\/noja\/content\/app\/index\.html/,
 		/http:\/\/(ncode|novel18)\.syosetu\.com\/n/,
 		/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/\d+\/novel_id~\d+/,
-		/http:\/\/novel\.syosetu\.org\/\d+\/(|index\.html|\d+\.html)/
+		/http:\/\/novel\.syosetu\.org\/\d+\/(|index\.html|\d+\.html)/,
+		/http:\/\/www\.pixiv\.net\/novel\/show.php\?id=\d+/
+
 	];
 	var matched = false;
 	var url = document.URL;
@@ -96,15 +98,15 @@ var onPageLoad = function(e) {
 	loadSubScript('chrome://noja/content/config.js', window.content);
 	window.content.noja_option.loadSubContent = function(url) {
 		return $.ajax({url:url, async:false}).responseText;
-	}
+	};
 	window.content.noja_option.save = function (db, data, key) {
 		var escapeUnicode = function (str) {
-		  return str.replace(/[^ -~]|\\/g, function(m0) {
-			var code = m0.charCodeAt(0);
-			return '\\u' + ((code < 0x10)? '000' : 
+			return str.replace(/[^ -~]|\\/g, function(m0) {
+				var code = m0.charCodeAt(0);
+				return '\\u' + ((code < 0x10)? '000' :
 							(code < 0x100)? '00' :
 							(code < 0x1000)? '0' : '') + code.toString(16);
-		  });
+			});
 		};
 		var fs = getLocalDirectory();
 		subDirectory(fs, db);
@@ -142,9 +144,9 @@ var onPageLoad = function(e) {
 		//	dfrd.done(callback);
 		//}
 		var unescapeUnicode = function(str) {
-		  return str.replace(/\\u([a-fA-F0-9]{4})/g, function(m0, m1) {
-			return String.fromCharCode(parseInt(m1, 16));
-		  });
+			return str.replace(/\\u([a-fA-F0-9]{4})/g, function(m0, m1) {
+				return String.fromCharCode(parseInt(m1, 16));
+			});
 		};
 		var fs = getLocalDirectory();
 		subDirectory(fs, db);
@@ -167,8 +169,8 @@ var onPageLoad = function(e) {
 				istream.QueryInterface(Components.interfaces.nsILineInputStream);
 				var line = {}, text = '', hasmore;
 				do {
-				  hasmore = istream.readLine(line);
-				  text += '\n'+line.value;
+					hasmore = istream.readLine(line);
+					text += '\n'+line.value;
 				} while (hasmore);
 				istream.close();
 				// @@ 諦めて素直にcallback

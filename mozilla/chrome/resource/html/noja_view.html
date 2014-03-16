@@ -117,14 +117,13 @@
  </div>
  <div id="noja_download_view"><div class="noja_close_popup"><a id="noja_closedv">[閉じる]</a></div><div id="noja_dv_main"></div></div>
  <div id="noja_booklist_view"></div>
-</div>
 
 <!-- templates -->
 <div id="noja_templates">
 
 <!-- subtitleとhonbunはノーチェック -->
 <!-- section_no以外は普通に使っているsection objectのprops名そのまま -->
-<script id="noja_download_section_template" type="text/x-jsrender">
+<script id="noja_download_section_template" type="text/x-jsrender">// <![CDATA[
 <div id="noja_download_section_{{:section_no}}">
 	{{if _maegaki != null}}
 		<div class="noja_download_maegaki">{{:_maegaki}}</div>
@@ -142,13 +141,13 @@
 		<div class="noja_download_atogaki">{{:_atogaki}}</div>
 	{{/if}}
 </div>
-</script>
+// ]]></script>
 
 
 <!-- subtitleとhonbunはノーチェック -->
 <!-- section_no以外は普通に使っているsection objectのprops名そのまま -->
 <!-- 旧形式そのままなので修正がいる -->
-<script id="noja_data_section_template" type="text/x-jsrender">
+<script id="noja_data_section_template" type="text/x-jsrender">// <![CDATA[
 <div>
 	{{if _maegaki != null}}
 		<div class="novel_p" data-noja="{{:section_no}}">
@@ -173,10 +172,13 @@
 		</div>
 	{{/if}}
 </div>
-</script>
+// ]]></script>
 
 
 
 
+
+</div>
+<!-- end of templates -->
 
 </div>
