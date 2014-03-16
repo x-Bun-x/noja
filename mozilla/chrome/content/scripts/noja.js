@@ -804,10 +804,6 @@ $(document).ready(function(){
 			});
 			this.setIndexPageReady ();
 		},
-		makeIndex: function (indexTable) {
-			console.debug('makeIndex called');
-			indexFrame.$div ().empty().append(indexTable);
-		},
 
 		// コンテキストスイッチが関数call単位で発生するなら色々まずいが、
 		// 非同期関数以外では明示的なコンテキストスイッチは発生しないはず。
@@ -842,37 +838,8 @@ $(document).ready(function(){
 			);
 		},
 
-		// @@ TODO @@ 基本的にはなくす
-		// ・非同期取得可能なのはなろう系固有の話
-		// ・idタイプのサイトの場合maxで最終話判定ができるわけではない
-		// とりあえず非同期apiがらみの要素はsiteParser側に押し込めた
-		// 
-		//
-		// 最終話にまつわる概念の定義がまずい
-		// 移動時に"現在が最終話(最初話)なのか？"を判定するならidタイプでもOk
-		// 現状の実装では"移動先話数が最終話(最初話)範囲を超えたか？"
-		// を判断しているため、あまりうまくない
-		// idタイプだと範囲内かどうかは返せても上下限超えのどちらかは返せない
-		// jumpToは番号しかしらないので、idMapにない＝invalidとわかっても
-		// next指示だったのかprev指示だったのかは認識しない
-		// jumpTo自体はasyncなので呼出し側でメッセージ処理やform処理するなら
-		// deferred化することになる
-		//
-		// なんにせよここでの使い方としては概念的なmapにあるかどうかを返す仕様にして
-		// idタイプサイトに対応しやすくしておく
-		//
-		//なろうapiで取って来るgeneral_all_no。つまり全話数。
-		//まあ目次読み込んだらいいって話もあるんだけど。
-		// これは
-		//  null(未確定)→false(load中)→数値(確定値)
-		// の状態遷移をする
-		// 確定値としての0がありえないなら
-		// numberにcastして0なら未確定
-		// と考えることができる
-		// undefinedはcastしてもNaNだがそれはあり得ないとする
-		// また文字列が入ることも考えない
-		GENERALALLNO_UNDEFINED: null,
-		GENERALALLNO_LOADING: false,
+		// もはやimport/restoreくらいしか使わない
+		// gSiteParserに管理はまかせて中継のみ
 		generalAllNo: null,
 		get GeneralAllNo() {
 			// cast to number
@@ -885,31 +852,11 @@ $(document).ready(function(){
 		set GeneralAllNo(x) {
 			this.forceSetGeneralAllNo (Math.max(this.generalAllNo, x));
 		},
-		isGeneralAllNoStatusReady: function () {
-			return this.generalAllNo !== this.GENERALALLNO_UNDEFINED
-				&& this.generalAllNo !== this.GENERALALLNO_LOADING;
-		},
-		isGeneralAllNoStatusUndefined: function () {
-			return this.generalAllNo == this.GENERALALLNO_UNDEFINED;
-		},
-		isGeneralAllNoStatusLoading: function () {
-			return this.generalAllNo == this.GENERALALLNO_LOADING;
-		},
-		setGeneralAllNoStatusUndefined: function () {
-			this.generalAllNo = this.GENERALALLNO_UNDEFINED;
-		},
-		setGeneralAllNoStatusLoading: function () {
-			this.generalAllNo = this.GENERALALLNO_LOADING;
-		},
-		/////
-		isSectionInRangeLowerBound: function (secNo) {
-			return gSiteParser.isSectionInRangeLowerBound(secNo);
-		},
-		isSectionInRangeUpperBound: function (secNo) {
-			return !this.isGeneralAllNoStatusReady() || secNo <= this.GeneralAllNo;
-		},
+
+		// 最終セクション判定だけは機能として必要
 		isLastSection: function (secNo) {
-			return this.GeneralAllNo && secNo === this.GeneralAllNo;
+			// 同じ値を返して来たらそれは次に進めない
+			return (gSiteParser.getNextSection (secNo) == secNo);
 		},
 
 	};
@@ -2020,7 +1967,7 @@ $(document).ready(function(){
 		};
 		return function() {
 			jumpTo (ctx.secId, ctx.pageNo);
-			ctx.Frame.hide();
+			ctx.frame.hide();
 		};
 	};
 
@@ -2613,7 +2560,7 @@ $(document).ready(function(){
 		this.alwaysOpenDefault = true;
 
 		// 内部用
-		this.maxSectionNo = 0;
+		this.maxSectionNo = 1;
 
 		console.debug('ctor done');
 	}
@@ -2629,7 +2576,13 @@ $(document).ready(function(){
 		//
 		$reURL: /chrome:\/\/noja\/content\/app\/index\.html/,
 	};
-	AppModeSite.parseURL = function (url) {
+	AppModeSite.parseURL = function (url, relative) {
+		if (relative === true) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.siteInfo.site + url;
+		}
 		var m = this.siteInfo.$reURL.exec (url);
 		if (m) {
 			return {m: m, };
@@ -2644,6 +2597,17 @@ $(document).ready(function(){
 		$getNovelSectionURL:		'{{:site}}{{:ncode}}/{{:sectionId}}/',
 		//
 	};
+	// 相対pathなら絶対path化する
+	AppModeSite.prototype.$toAbsoluteURL = function (url) {
+		if (!url.startsWith(this.siteInfo.site)) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.$getSiteURL ({path: url});
+		}
+		return url;
+	};
+
 
 	// 「のじゃー」ラベルを元ページに貼り付け
 	AppModeSite.prototype.initialize = function () {
@@ -2657,6 +2621,7 @@ $(document).ready(function(){
 		});
 	};
 
+	// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
 	AppModeSite.prototype.onReadyNoja = function () {
 		//
 	};
@@ -2688,15 +2653,19 @@ $(document).ready(function(){
 		this.siteInfo.login = (token !== '');
 	};
 
-	// ajaxでページを読み込む
 	// Deferred objectを返す
-	AppModeSite.prototype.getNovelSection = function (section) {
+	// ページを読み込みparseして返す
+	AppModeSite.prototype.getNovelSection = function (secId) {
+		var self = this;
 		if (!gNetworkManager.acquire()) {
 			return new $.Deferred().reject().promise();
 		}
-		return $.get(this.$getNovelSectionURL (section))
+		return $.get(this.$getNovelSectionURL (secId))
 		.always(function () {
 			gNetworkManager.release();
+		}).then(function (htmldoc) {
+			return new $.Deferred()
+				.resolve(self.parseHtmlContents(htmldoc, secId));
 		});
 	};
 	// これは上で使われる:template化
@@ -2711,16 +2680,20 @@ $(document).ready(function(){
 	};
 
 
+	AppModeSite.prototype.getNextSection = function (secId) {
+		return secId;
+	};
 
-	AppModeSite.prototype.isSectionInRangeLowerBound = function (sec) {
-		return (sec >= 1);
+	AppModeSite.prototype.getPrevSection = function (secId) {
+		return secId;
 	};
 	// maxSectionNoは現在読み込まれている最大の話。
 	AppModeSite.prototype.isLoadableSection = function (sec) {
-		return (sec <= this.maxSectionNo);
+		return false;
+		//return (sec <= this.maxSectionNo);
 	};
-	AppModeSite.prototype.updateMaxSection = function (sec, force) {
-		this.maxSectionNo = (force === true) ? sec : Math.max(this.maxSectionNo, sec);
+	AppModeSite.prototype.updateMaxSection = function (secId, force) {
+		//this.maxSectionNo = (force === true) ? secId : Math.max(this.maxSectionNo, secId);
 	};
 
 
@@ -2898,13 +2871,6 @@ $(document).ready(function(){
 		return url;
 	};
 
-	AppModeSite.prototype.getNextSection = function (secId) {
-		return ++secId;
-	};
-
-	AppModeSite.prototype.getPrevSection = function (secId) {
-		return --secId;
-	};
 
 
 
@@ -2975,7 +2941,6 @@ $(document).ready(function(){
 		//
 		this.alwaysOpenDefault = false;
 
-		this.maxSectionNo = 0;
 
 		var m = this.parseURL (url);
 		if (m) {
@@ -2986,6 +2951,7 @@ $(document).ready(function(){
 		} else {
 			// 本来formatがあっていてcreateされているはずなので有りえない
 		}
+		this.maxSectionNo = this.secNo;
 
 	}
 
@@ -3007,7 +2973,13 @@ $(document).ready(function(){
 		// 短編のときはm[2]とm[3]が空になるはず
 		$reURL: /http:\/\/ncode\.syosetu\.com\/([nN][0-9A-Za-z]+)(\/([0-9]+))?/,
 	};
-	NarouSite.parseURL = function (url) {
+	NarouSite.parseURL = function (url, relative) {
+		if (relative === true) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.siteInfo.site + url;
+		}
 		var m = this.siteInfo.$reURL.exec(url);
 		if (m) {
 			return {
@@ -3021,6 +2993,14 @@ $(document).ready(function(){
 		console.debug('parseURL failed: !m');
 		return null;
 	};
+	NarouSite.prototype.$getSectionIdFromURL = function (url) {
+		var m = this.parseURL (url, true);
+		if (m) {
+			return m.sectionId;
+		}
+		return null;
+	};
+
 
 	NarouSite.templates = {
 		$getLoginURL:				'{{:site0}}login/input/',
@@ -3050,6 +3030,16 @@ $(document).ready(function(){
 		$getShioriURL:				'{{:site0}}bookmarker/add/ncode/{{:ncode2}}/no/{{:sectionId}}/?token={{:token}}',
 	};
 
+	// 相対pathなら絶対path化する
+	NarouSite.prototype.$toAbsoluteURL = function (url) {
+		if (!url.startsWith(this.siteInfo.site)) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.$getSiteURL ({path: url});
+		}
+		return url;
+	};
 
 
 	// 「のじゃー」ラベルを元ページに貼り付け
@@ -3079,7 +3069,8 @@ $(document).ready(function(){
 
 	// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
 	NarouSite.prototype.onReadyNoja = function () {
-		// 初期ページのparseは終わっているので短編判定済indexを取れる
+		// 目次取得はもう少し早いタイミング
+		// (初期ページのparse最後)
 	};
 
 
@@ -3093,22 +3084,6 @@ $(document).ready(function(){
 	};
 
 
-	//ajaxでなろう小説APIからデータを受け取る
-	// データタイプはjsonなのでdecodeされてdataのpropになっている?
-	// どうせjsonであることに依存しているのだから
-	// getJSONにする(Deferred対応でfailも処理できるし)
-	NarouSite.prototype.loadMaxSectionNo = function () {
-		if (this.maxSectionNo === 0) {
-			// あり得ないだろうがまだ取れていないなら
-			if (this.deferredFetchMaxSectionNo !== null) {
-				return this.deferredFetchMaxSectionNo;
-			} else {
-				// 取り損なっていたのなら再度
-				return this.$fetchMaxSectionNo();
-			}
-		}
-		return new $.Deferred().resolve(this.maxSectionNo).promise();
-	};
 
 	// apiはflow-control外なので常に動かせるとする
 	NarouSite.prototype.$fetchMaxSectionNo = function () {
@@ -3128,8 +3103,8 @@ $(document).ready(function(){
 						console.debug('api returns with too many data');
 					}
 					var maxSectionNo = parseInt (json[1].general_all_no);
-					self.maxSectionNo = maxSectionNo;
 					console.debug('api got maxSectionNo', maxSectionNo);
+					self.maxSectionNo = maxSectionNo;
 					if (this.isSingleSection && maxSectionNo != 1) {
 						console.debug('singleSection mode: api return != 1:', maxSectionNo);
 					}
@@ -3166,27 +3141,19 @@ $(document).ready(function(){
 		this.siteInfo.login = (token !== '');
 	};
 
-	// 相対pathなら絶対path化する
-	NarouSite.prototype.$toAbsoluteURL = function (url) {
-		if (!url.startsWith(this.siteInfo.site)) {
-			if (url.startsWith('/')) {
-				url.slice(1);
-			}
-			url = this.$getSiteURL (url);
-		}
-		return url;
-	};
 
-
-	// ajaxでページを読み込む
 	// Deferred objectを返す
 	NarouSite.prototype.getNovelSection = function (secId) {
+		var self = this;
 		if (!gNetworkManager.acquire()) {
 			return new $.Deferred().reject().promise();
 		}
 		return $.get(this.$getNovelSectionURL ({sectionId: secId}))
 		.always(function () {
 			gNetworkManager.release();
+		}).then(function (htmldoc) {
+			return new $.Deferred()
+				.resolve(self.parseHtmlContents(htmldoc, secId));
 		});
 	};
 
@@ -3206,31 +3173,26 @@ $(document).ready(function(){
 	};
 
 	NarouSite.prototype.getNextSection = function (secId) {
-		return ++secId;
+		var newSecId = secId + 1;
+		return (newSecId <= this.maxSectionNo) ? newSecId : secId;
 	};
-
 	NarouSite.prototype.getPrevSection = function (secId) {
-		return --secId;
+		var newSecId = secId - 1;
+		return (newSecId >= 1) ? newSecId : secId;
 	};
-
-
-	NarouSite.prototype.isSectionInRangeLowerBound = function (sec) {
-		return (sec >= 1);
-	};
-
-	// maxSectionはgeneralALlNo未取得で話数確定していないときでも
-	// initial page以前の部分は確実にコンテンツが存在するとして
-	// 移動できるようにするもの(prev移動用途)
-	// 下限sectionはno=1
-	//NarouSite.prototype.isSectionInRangeLowerBound = function (sec) {
-	//	return (sec >= 1);
-	//};
 	NarouSite.prototype.isLoadableSection = function (sec) {
 		return (sec <= this.maxSectionNo);
 	};
-	NarouSite.prototype.updateMaxSection = function (sec, force) {
-		//this.maxSectionNo = (force === true) ? sec : Math.max(this.maxSectionNo, sec);
-		// 特になにもしない
+	// APIで取れなかった時
+	// 取れても読んでいるうちに更新された時など
+	// 変化するのでupdateが必要
+	// 殆ど内部用途だが、現状restore,import等から使われるので
+	// public扱い
+	NarouSite.prototype.updateMaxSection = function (secId, force) {
+		//console.debug ('update max', secId, this.maxSectionNo);
+		this.maxSectionNo = (force === true)
+			? secId : Math.max(this.maxSectionNo, secId);
+		//console.debug ('new max', this.maxSectionNo);
 	};
 
 
@@ -3303,6 +3265,26 @@ $(document).ready(function(){
 		}
 	};
 
+	// link解析がindexのa書き換えと同じなのでprivate methodでまとめる
+	// nobel_bnは上下2か所になるので上だけ使う
+	NarouSite.prototype.$updateRelativeSectionAtSection = function (contents, secId) {
+		var relativeLinks = contents.find('#novel_color > div.novel_bn:eq(0) > a');
+		var maxSecId = secId;
+		var self = this;
+		if (relativeLinks.size()) {
+			relativeLinks.each (function() {
+				var url = $(this).attr('href');
+				//console.debug('got relative link', url);
+				var relSecId = self.$getSectionIdFromURL(url);
+				if (relSecId !== null) {
+					maxSecId = Math.max(maxSecId, relSecId);
+				}
+			});
+		}
+		//console.debug('update max', maxSecId);
+		this.updateMaxSection (maxSecId);
+	};
+
 
 	// ここの判定はなんとか変更したいところ
 	// 目次ページは事前に除外されているので、
@@ -3342,7 +3324,9 @@ $(document).ready(function(){
 		this.siteInfo.ncode2 = (t.size()) ? t.attr('href').match(/([0-9]*)\/$/)[1] : null;
 	};
 
+	// '#container'レベルで取ってきたcontents
 	NarouSite.prototype.$parseHtmlCommon = function (contents, section) {
+		this.$updateRelativeSectionAtSection (contents, section);
 		this.$updateAutherAtSection (contents);
 		// コンテンツの内容の解析
 		var sec = {};
@@ -3389,9 +3373,9 @@ $(document).ready(function(){
 		// 短編のときには実際には不要だが
 		// 念のため取得してチェックする
 		var self = this;
-		this.deferredFetchMaxSectionNo = this.$fetchMaxSectionNo ().then(
+		this.$fetchMaxSectionNo ().then(
 			function (maxSectionNo) {
-				self.deferredFetchMaxSectionNo = null;
+				// fetch側で設定は行っているので他にすることはない
 			}
 			// errorならそのまま？
 		);
@@ -3470,11 +3454,11 @@ $(document).ready(function(){
 		var indexPage = $($.parseHTML(htmldoc)).find('#novel_color');
 		var tocInfo = {
 			totalSections: this.maxSectionNo,	// 取得失敗なら0のまま
-			series:      $('p.series_title', indexPage),	// 確認済
-			title:       $('p.novel_title', indexPage),
-			author:      $('div.novel_writername', indexPage),
-			description: $('#novel_ex', indexPage),	// div
-			index:       $('div.index_box', indexPage),
+			series:      indexPage.find('p.series_title'),	// 確認済
+			title:       indexPage.find('p.novel_title'),
+			author:      indexPage.find('div.novel_writername'),
+			description: indexPage.find('#novel_ex'),	// div
+			index:       indexPage.find('div.index_box'),
 		};
 		console.debug(tocInfo);
 
@@ -3523,22 +3507,14 @@ $(document).ready(function(){
 		// apiが値を返さないこともあるのでmaxは計算しないといけない
 		var totalSections = 0;
 		var maxSectionNo = 0;
-		var reURL = /\/([nN][0-9-A-Za-z]+)\/(\d+)\//;
 		// aで回さずにdl.novel_sublist2で回すべきか？
 		$(tocInfo.index).find('a').each(function () {
 			var url = $(this).attr('href');
-			var m = reURL.exec(url);
-			if (m) {
-				var ncode = m[1];
-				var secId = parseInt(m[2]);
-				if (ncode != self.siteInfo.ncode) {
-					console.debug('ncode mismatch', ncode, self.siteInfo.ncode);
-				}
-				if (secId !== 0) {
-					$(this).attr('noja_jumpTo', secId);
-					maxSectionNo = Math.max(maxSectionNo, secId);
-					++totalSections;
-				}
+			var secId = self.$getSectionIdFromURL(url);
+			if (secId !== null) {
+				$(this).attr('noja_jumpTo', secId);
+				maxSectionNo = Math.max(maxSectionNo, secId);
+				++totalSections;
 			}
 			$(this).attr('href', null)		// @@ TODO @@ Javascript側のcleanup
 			.css(indexItemStyle)
@@ -3547,9 +3523,9 @@ $(document).ready(function(){
 		if (totalSections != maxSectionNo) {
 			console.debug('totalSections != maxSectionNo', totalSections, maxSectionNo);
 		}
-		if (this.maxSectionNo === 0) {
-			tocInfo.totalSections = totalSections;
-		}
+		// APIで取れないことや、コンテンツ更新されるタイミングもあるので更新する
+		this.updateMaxSection (maxSectionNo);
+		tocInfo.totalSections = maxSectionNo;
 		return tocInfo;
 	};
 
@@ -3898,7 +3874,6 @@ $(document).ready(function(){
 		this.alwaysOpenDefault = false;
 
 		//
-		this.maxSectionNo = 0;
 
 		var m = this.parseURL (url);
 		if (m) {
@@ -3909,6 +3884,7 @@ $(document).ready(function(){
 		} else {
 			// 本来formatがあっていてcreateされているはずなので有りえない
 		}
+		this.maxSectionNo = this.secNo;
 	}
 	// なろう系の場合は短編の場合、
 	// 作品topページ=コンテンツページなので、
@@ -3923,7 +3899,13 @@ $(document).ready(function(){
 		api:   'http://api.syosetu.com/novel18api/api/',
 		$reURL: /http:\/\/novel18\.syosetu\.com\/([nN][0-9A-Za-z]+)(\/([0-9]+))?/,
 	};
-	NocMoonSite.parseURL = function (url) {
+	NocMoonSite.parseURL = function (url, relative) {
+		if (relative === true) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.siteInfo.site + url;
+		}
 		var m = this.siteInfo.$reURL.exec(url);
 		if (m) {
 			return {
@@ -3968,6 +3950,23 @@ $(document).ready(function(){
 		$getFavnovelmain18BaseURL:	'{{:site0}}favnovelmain18/',
 	};
 
+	// 相対pathなら絶対path化する
+	NocMoonSite.prototype.$toAbsoluteURL = function (url) {
+		if (!url.startsWith(this.siteInfo.site)) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.$getSiteURL ({path: url});
+		}
+		return url;
+	};
+	NocMoonSite.prototype.$getSectionIdFromURL = function (url) {
+		var m = this.parseURL (url, true);
+		if (m) {
+			return m.sectionId;
+		}
+		return null;
+	};
 
 
 
@@ -4007,7 +4006,8 @@ $(document).ready(function(){
 
 	// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
 	NocMoonSite.prototype.onReadyNoja = function () {
-		// 初期ページのparseは終わっているので短編判定済indexを取れる
+		// 目次取得はもう少し早いタイミング
+		// (初期ページのparse最後)
 	};
 
 	NocMoonSite.prototype.onOpenNoja = function () {
@@ -4020,22 +4020,6 @@ $(document).ready(function(){
 	};
 
 
-	//ajaxでなろう小説APIからデータを受け取る
-	// データタイプはjsonなのでdecodeされてdataのpropになっている?
-	// どうせjsonであることに依存しているのだから
-	// getJSONにする(Deferred対応でfailも処理できるし)
-	NocMoonSite.prototype.loadMaxSectionNo = function () {
-		if (this.maxSectionNo === 0) {
-			// あり得ないだろうがまだ取れていないなら
-			if (this.deferredFetchMaxSectionNo !== null) {
-				return this.deferredFetchMaxSectionNo;
-			} else {
-				// 取り損なっていたのなら再度
-				return this.$fetchMaxSectionNo();
-			}
-		}
-		return new $.Deferred().resolve(this.maxSectionNo).promise();
-	};
 
 	// apiはflow-control外なので常に動かせるとする
 	NocMoonSite.prototype.$fetchMaxSectionNo = function () {
@@ -4053,8 +4037,8 @@ $(document).ready(function(){
 						console.debug('api returns with too many data', json);
 					}
 					var maxSectionNo = parseInt (json[1].general_all_no);
-					self.maxSectionNo = maxSectionNo;
 					console.debug('api got maxSectionNo', maxSectionNo);
+					self.maxSectionNo = maxSectionNo;
 					if (this.isSingleSection && maxSectionNo != 1) {
 						console.debug('singleSection mode: api return != 1:', maxSectionNo);
 					}
@@ -4094,45 +4078,47 @@ $(document).ready(function(){
 		this.siteInfo.login = (token !== '');
 	};
 
-	// 相対pathなら絶対path化する
-	NocMoonSite.prototype.$toAbsoluteURL = function (url) {
-		if (!url.startsWith(this.siteInfo.site)) {
-			if (url.startsWith('/')) {
-				url.slice(1);
-			}
-			url = this.$getSiteURL (url);
-		}
-		return url;
-	};
 
 
-	// ajaxでページを読み込む
 	// Deferred objectを返す
-	NocMoonSite.prototype.getNovelSection = function (section) {
+	NocMoonSite.prototype.getNovelSection = function (secId) {
+		var self = this;
 		if (!gNetworkManager.acquire()) {
 			return new $.Deferred().reject().promise();
 		}
-		return $.get(this.$getNovelSectionURL (section))
+		return $.get(this.$getNovelSectionURL ({sectionId: secId}))
 		.always(function () {
 			gNetworkManager.release();
+		}).then(function (htmldoc) {
+			return new $.Deferred()
+				.resolve(self.parseHtmlContents(htmldoc, secId));
 		});
 	};
 
 
 
 
-	NocMoonSite.prototype.isSectionInRangeLowerBound = function (sec) {
-		return (sec >= 1);
+	// Sequenceなのでそのままinc/dec: 範囲チェックはしない
+	NocMoonSite.prototype.getNextSection = function (secId) {
+		var newSecId = secId + 1;
+		return (newSecId <= this.maxSectionNo) ? newSecId : secId;
 	};
-	//NocMoonSite.prototype.isSectionInRangeLowerBound = function (sec) {
-	//	return (sec >= 1);
-	//};
+	NocMoonSite.prototype.getPrevSection = function (secId) {
+		var newSecId = secId - 1;
+		return (newSecId >= 1) ? newSecId : secId;
+	};
 	NocMoonSite.prototype.isLoadableSection = function (sec) {
 		return (sec <= this.maxSectionNo);
 	};
-	NocMoonSite.prototype.updateMaxSection = function (sec, force) {
-		this.maxSectionNo = (force === true) ? sec : Math.max(this.maxSectionNo, sec);
+	// APIで取れなかった時
+	// 取れても読んでいるうちに更新された時など
+	// 変化するのでupdateが必要
+	// 殆ど内部用途だが、現状restore,import等から使われるので
+	// public扱い
+	NocMoonSite.prototype.updateMaxSection = function (secId, force) {
+		this.maxSectionNo = (force === true) ? secId : Math.max(this.maxSectionNo, secId);
 	};
+
 
 	// Deferred interface
 	NocMoonSite.prototype.importInitialContents = function () {
@@ -4146,14 +4132,7 @@ $(document).ready(function(){
 		return  url.replace('viewimagebig', 'viewimage');
 	};
 
-	// Sequenceなのでそのままinc/dec: 範囲チェックはしない
-	NocMoonSite.prototype.getNextSection = function (secId) {
-		return ++secId;
-	};
 
-	NocMoonSite.prototype.getPrevSection = function (secId) {
-		return --secId;
-	};
 
 	////////////////////////////////////////////////////////
 	NocMoonSite.prototype.$updateThemeAtSection = function (contents) {
@@ -4207,6 +4186,25 @@ $(document).ready(function(){
 		}
 	};
 
+	// link解析がindexのa書き換えと同じなのでprivate methodでまとめる
+	// nobel_bnは上下2か所になるので上だけ使う
+	NocMoonSite.prototype.$updateRelativeSectionAtSection = function (contents, secId) {
+		var relativeLinks = contents.find('#novel_color > div.novel_bn:eq(0) > a');
+		var maxSecId = secId;
+		var self = this;
+		if (relativeLinks.size()) {
+			relativeLinks.each (function() {
+				var url = $(this).attr('href');
+				var relSecId = self.$getSectionIdFromURL (url);
+				if (relSecId !== null) {
+					maxSecId = Math.max(maxSecId, relSecId);
+				}
+			});
+		}
+		//console.debug('update max', maxSecId);
+		this.updateMaxSection (maxSecId);
+	};
+
 	// ここの判定はなんとか変更したいところ
 	// 目次ページは事前に除外されているので、
 	// 連載の文章ページor短編の文章ページの識別
@@ -4247,6 +4245,7 @@ $(document).ready(function(){
 	};
 
 	NocMoonSite.prototype.$parseHtmlCommon = function (contents, section) {
+		this.$updateRelativeSectionAtSection (contents, section);
 		this.$updateAutherAtSection(contents);
 
 		var sec = {};
@@ -4299,9 +4298,9 @@ $(document).ready(function(){
 		// 短編のときには実際には不要だが
 		// 念のため取得してチェックする
 		var self = this;
-		this.deferredFetchMaxSectionNo = this.$fetchMaxSectionNo ().then(
+		this.$fetchMaxSectionNo ().then(
 			function (maxSectionNo) {
-				self.deferredFetchMaxSectionNo = null;
+				// fetch側で設定は行っているので他にすることはない
 			}
 			// errorならそのまま？
 		);
@@ -4431,22 +4430,14 @@ $(document).ready(function(){
 		// apiが値を返さないこともあるのでmaxは計算しないといけない
 		var totalSections = 0;
 		var maxSectionNo = 0;
-		var reURL = /\/([nN][0-9-A-Za-z]+)\/(\d+)\//;
 		// aで回さずにdl.novel_sublist2で回すべきか？
 		$(tocInfo.index).find('a').each(function () {
 			var url = $(this).attr('href');
-			var m = reURL.exec(url);
-			if (m) {
-				var ncode = m[1];
-				var secId = parseInt(m[2]);
-				if (ncode != self.siteInfo.ncode) {
-					console.debug('ncode mismatch', ncode, self.siteInfo.ncode);
-				}
-				if (secId !== 0) {
-					$(this).attr('noja_jumpTo', secId);
-					maxSectionNo = Math.max(maxSectionNo, secId);
-					++totalSections;
-				}
+			var secId = self.$getSectionIdFromURL(url);
+			if (secId !== null) {
+				$(this).attr('noja_jumpTo', secId);
+				maxSectionNo = Math.max(maxSectionNo, secId);
+				++totalSections;
 			}
 			$(this).attr('href', null)		// @@ TODO @@ Javascript側のcleanup
 			.css(indexItemStyle)
@@ -4455,9 +4446,9 @@ $(document).ready(function(){
 		if (totalSections != maxSectionNo) {
 			console.debug('totalSections != maxSectionNo', totalSections, maxSectionNo);
 		}
-		if (this.maxSectionNo === 0) {
-			tocInfo.totalSections = totalSections;
-		}
+		// APIで取れないことや、コンテンツ更新されるタイミングもあるので更新する
+		this.updateMaxSection (maxSectionNo);
+		tocInfo.totalSections = maxSectionNo;
 		return tocInfo;
 	};
 
@@ -4771,8 +4762,6 @@ $(document).ready(function(){
 		this.enableReputationForm = false;
 		this.alwaysOpenDefault = false;
 
-		this.maxSectionNo = 0;
-
 		var m = this.parseURL (url);
 		if (m) {
 			this.siteInfo.ncode = m.novelId;
@@ -4804,7 +4793,7 @@ $(document).ready(function(){
 			if (url.startsWith('/')) {
 				url = url.slice(1);
 			}
-			url = this.site + url;
+			url = this.siteInfo.site + url;
 		}
 		var m = this.siteInfo.$reURL.exec (url);
 		if (m) {
@@ -4829,7 +4818,25 @@ $(document).ready(function(){
 		$getNovelSectionURL:	'{{:site}}stories/view/{{:sectionId}}/novel_id~{{:ncode}}',
 	};
 
+	// 相対pathなら絶対path化する
+	AkatsukiSite.prototype.$toAbsoluteURL = function (url) {
+		if (!url.startsWith(this.siteInfo.site)) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.$getSiteURL ({path: url});
+		}
+		return url;
+	};
 
+	// sectionIdを拾う:idmapでも使う
+	AkatsukiSite.prototype.$getSectionIdFromURL = function (url) {
+		var m = this.parseURL (url, true);
+		if (m) {
+			return m.sectionId;
+		}
+		return null;
+	};
 
 
 
@@ -4849,26 +4856,18 @@ $(document).ready(function(){
 
 		// 暁の場合、短編と連載に区別がないので
 		// この段階でfetch開始しても問題ない
-		this.indexDeferred = this.$fetchAsyncIndexPage().then(
-			this.$finishIndexPage.bind(this)
-			, null
-			, this.$appendIndexPage.bind(this)
+		this.loadIndex().then(
+			function (tocInfo) {
+				// 登録処理
+				gIndexManager.registIndex (tocInfo);
+			}
+			// errorならそのまま？
 		);
 	};
 
-	// 自動loadIndexさせないとid:secnoのmapが作れない
 	// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
 	AkatsukiSite.prototype.onReadyNoja = function () {
-		var dfrd = this.indexDeferred;
-		this.indexDeferred = null;
-		return dfrd.then(function (indexTable) {
-			// メイン側ready後に呼ばれてdoneに繋げるので、
-			// これが動くときは確実にメインもindexerもready/done状態
-			// 構築済のテーブルをgIndexManagerに渡してOk
-			// 中身は<table>構造
-			// 統一するなら、前書きやらタイトルやらつけないといけない
-			gIndexManager.makeIndex(indexTable);
-		});
+		//
 	};
 
 	AkatsukiSite.prototype.onOpenNoja = function () {
@@ -4904,17 +4903,18 @@ $(document).ready(function(){
 
 
 
-	
-	// ajaxでページを読み込む
 	// Deferred objectを返す
-	AkatsukiSite.prototype.getNovelSection = function (section) {
+	AkatsukiSite.prototype.getNovelSection = function (secId) {
+		var self = this;
 		if (!gNetworkManager.acquire()) {
-			console.debug('netwokr busy');
 			return new $.Deferred().reject().promise();
 		}
-		return $.get(this.$getNovelSectionURL ({sectionId: section}))
+		return $.get(this.$getNovelSectionURL ({sectionId: secId}))
 		.always(function () {
 			gNetworkManager.release();
+		}).then(function (htmldoc) {
+			return new $.Deferred()
+				.resolve(self.parseHtmlContents(htmldoc, secId));
 		});
 	};
 
@@ -4938,27 +4938,18 @@ $(document).ready(function(){
 	AkatsukiSite.prototype.getNextSection = function (secId) {
 		return this.sectionIdMap.queryNext(secId);
 	};
-
 	// idが純粋にidなのでlinkから取る
 	AkatsukiSite.prototype.getPrevSection = function (secId) {
 		return this.sectionIdMap.queryPrev(secId);
 	};
-
-	// 下限かどうか上限かどうかはindexが解決するまではidでは判断不能
-	// 移動可能か？NGならその段階で改めてfirst,lastチェックをする等しないと
-	// その際、currentがfirst,lastかを判断することはできても
-	//  targetidそのものが上限下限を超えたかどうかは言えない
-	//  (数値的な大小関係を持ったmin,maxはorderMapを作らないと無理)
-	AkatsukiSite.prototype.isSectionInRangeLowerBound = function (secId) {
-		return this.sectionIdMap.queryExists (secId);
-	};
-
 	AkatsukiSite.prototype.isLoadableSection = function (secId) {
 		return this.sectionIdMap.queryExists (secId);
 	};
 	AkatsukiSite.prototype.updateMaxSection = function (secId, force) {
 		this.sectionIdMap.assert (secId);
 	};
+
+
 
 	AkatsukiSite.prototype.rebuildFormsOnImportRestore = function () {
 		$('#noja_impression_usertype').empty();
@@ -4970,14 +4961,6 @@ $(document).ready(function(){
 	};
 
 	////////////////////////////////////////////////////////
-	// sectionIdを拾う:idmapでも使う
-	AkatsukiSite.prototype.$getSectionIdFromURL = function (url) {
-		var m = this.parseURL (url, true);
-		if (m) {
-			return m.sectionId;
-		}
-		return null;
-	};
 
 	//html body#novel div#wrapper div#container2 div#contents2 div#contents-inner2 div.box div.box div.paging_for_view
 	// これがページ移動 #contents-inner2を取ってくるので情報は取れる
@@ -5007,13 +4990,13 @@ $(document).ready(function(){
 	// paging_for_viewは上下にあるので1つ目を使うべし
 	AkatsukiSite.prototype.parseRelativeSectionLink = function (secId, story) {
 		var paging = $('.paging_for_view:eq(0)', story);
-		console.debug($('.paging_for_view:eq(0)', story).html());
+		//console.debug($('.paging_for_view:eq(0)', story).html());
 		// 最新・最終のときはaがないのでselect結果が空になる
 		var prev = $('span.prev > a', paging);
 		var next = $('span.next > a', paging);
-		console.debug('paging: ', paging);
-		console.debug('prev: ', prev, prev.attr('href'));
-		console.debug('next: ', next, next.attr('href'));
+		//console.debug('paging: ', paging);
+		//console.debug('prev: ', prev, prev.attr('href'));
+		//console.debug('next: ', next, next.attr('href'));
 
 		this.sectionIdMap.setRelative({
 			current: secId,
@@ -5285,47 +5268,35 @@ $(document).ready(function(){
 		return {totalSections: total_sec_no, toc: null};	// とりあえず現状ダミー
 	};
 
-	// オートロードの状態をみて動作を変える？
-	// 更新扱い？
-	// 少なくとも読み込み中なら待つべし
+	// indexは帯域制御外とする
+	// ただし、自分自身の多重loadだけは避ける
 	AkatsukiSite.prototype.loadIndex = function () {
-		var dfrd = new $.Deferred();
-		var self = this;
-		if (!gNetworkManager.acquire()) {
-			return dfrd.reject().promise();
+		// 既に動いている途中ならそれを返す
+		if (('deferredFetchIndex' in this)
+			&& this.deferredFetchIndex !== null
+			&& this.deferredFetchIndex.state() == 'pending') {
+			return this.deferredFetchIndex;
 		}
-		$.get(this.$getNovelIndexBaseURL()).always(function () {
-			gNetworkManager.release();
-		}).then(
-			//success:
-			function(htmldoc) {
-				var tocInfo = self.$parseIndexPage (htmldoc);
-				dfrd.resolve (tocInfo);
-			},
-			//error:
-			function() {
-				dfrd.reject ();
+		// 初回or完了済の更新
+		var self = this;
+		this.deferredFetchIndex = this.$fetchAsyncIndexPage().then(
+			// fetcherのdoneを受ける
+			// 最後のprogressは終わっているはず
+			// (所詮シングルスレッド非同期だから…)
+			function (indexPageNo, indexPageInfo) {
+				// 目次は監視側が登録する
+				var dfrd = new $.Deferred();
+				dfrd.resolve (self.tocInfo);
+				// 中身を投げたので不要になったものは消す
+				delete self.tocInfo;
+				return dfrd.promise();
 			}
+			, null
+			, self.$appendIndexPage.bind(self)
 		);
-		return dfrd.promise();
+		return this.deferredFetchIndex.promise();
 	};
 
-	// 非同期にmaxだけもらうことはできないのでloadIndexする
-	// callbackの仕様が同一なのでそのままrelayするだけ?
-	// と思ったが折角loadIndexするのでready設定はすべき
-	AkatsukiSite.prototype.loadMaxSectionNo = function () {
-		var dfrd = new $.Deferred();
-		this.loadIndex().then(
-			function (maxSectionNo) {
-				gIndexManager.setIndexPageReady();
-				dfrd.resolve (maxSectionNo);
-			},
-			function () {
-				dfrd.reject ();
-			}
-		);
-		return dfrd.promise ();
-	};
 
 	// '/html/body/div/div[2]/div/div/div[2]/div/div/div[2]'
 	// '#contents-inner2 div.box div.box div.body-x1 div.paging-top'
@@ -5357,21 +5328,49 @@ $(document).ready(function(){
 
 	// fetcherのnotifyを受けるので、これはthis contextでは動かない
 	// 登録時にbindでthisを決めているのでthisは本来のinstanceを指す
+	// divの下につけた全要素がcontents
 	AkatsukiSite.prototype.$appendIndexPage
 		= function (indexPageNo, indexPageInfo, contents) {
 		// doneかつerrorでpageNo=1の場合は単一indexで、その場合
 		// errorなのでtotal系の情報はinvalid
-		var table = $('#contents-inner2 div.font-bb table', contents);
+		contents = contents.find('#contents-inner2 >div.story >div.story');
+		var table = contents.find('div.font-bb table');
 		// 最初のページではテーブルの初期構築
 		if (indexPageNo == 1) {
-			this.indexTable = $('<table />')
-				.append($('thead', table))
-				.append('<tbody />');
+			var info = contents.find('h3.font-bb');
+			//console.debug (info);
+			this.tocInfo = {
+				totalSections:	0,
+				//series:			null,	// ない場合は項目自体なしでOk
+				title:			info.eq(0),	// find('#LookNovel'),
+				author:			info.eq(1),	// もう少しうまい取り方をしたほうがいい？
+				//#contents-inner2 div.story div.story div.body-x1 p
+				// body-x1の子のfirstがpでhr+br+div(desc)+br+hr+br
+				// くらいまでの間が対象
+				// 原作とあらすじ
+				description:	$('<div/>').append(contents
+								.find('div:not(".txt-c")').eq(0)
+								.find('>p:eq(0), >div:eq(0)')
+								),
+				index:			$('<table />')
+								.append(table.find('thead'))
+								.append('<tbody />'),
+			};
+			//console.debug(this.tocInfo);
 		}
-		var tr = $('tbody > tr', table);
+		var tr = table.find('tbody > tr');
 		//console.debug('index table', this.indexTable);
-		this.indexTable.children('tbody').append(tr);
-		// 後はsectionIdmapを作る
+		this.tocInfo.index.find('tbody').append(tr);
+
+		// 後はsectionIdmapを作るのと、目次ページ用タグ調整
+		// index部分
+		// href無効化、css設定、click handler設定
+		// 多分、urlからsecIdを出すほうがいいはず
+		// マウスカーソルをlinkクリック可能な表示に変えるためのcss指定
+		var indexItemStyle = {
+			'cursor': 'pointer',
+		};
+
 		var self = this;
 		//console.debug(this.sectionIdMap);
 		tr.each(function () {
@@ -5388,29 +5387,28 @@ $(document).ready(function(){
 				break;
 			case 2:
 				var a = td.eq(0).children('a:eq(0)');
+				var url = a.attr('href');
 				var sectionInfo = {
-					url: a.attr('href'),
+					url: url,
 					subtitle: a.text(),
 					publishedDateTime: td.eq(1).text(),
 				};
+				++self.tocInfo.totalSections;
 				self.sectionIdMap.pushSection(sectionInfo);
+				// urlについてherfを削って独自attrを付ける
+				var secId = self.$getSectionIdFromURL(url);
+				if (secId !== null) {
+					a.attr('noja_jumpTo', secId);
+				}
+				a.attr('href', null).css(indexItemStyle);
 				break;
 			}
 		});
-	};
-	// fetcherのdoneを受ける
-	// 最後のprogressは終わっているはず
-	// (所詮シングルスレッド非同期だから…)
-	// 登録時にbindでthisを決めているのでthisは本来のinstanceを指す
-	AkatsukiSite.prototype.$finishIndexPage
-		= function (indexPageNo, indexPageInfo) {
-		// 目次は監視側が登録する
-		this.indexDeferred.resolve (this.indexTable);
-		// 中身を投げたので不要になったものは消す
-		this.indexTable = null;
+		//console.debug(this.tocInfo);
 	};
 
 	// pagingの中身はあまりチェックせず、総話数等の表示だけparse
+	// divの下につけた全要素がcontents
 	AkatsukiSite.prototype.$parseIndexPagingNavi = function (indexPageNo, contents) {
 		//console.debug(contents);
 		var paging_top = $('#contents-inner2 div.paging-top', contents);
@@ -5461,7 +5459,7 @@ $(document).ready(function(){
 		var dfrd = new $.Deferred();
 		// まず1ページだけ取ってみる
 		var self = this;
-		// ダイレクトにloopだとネストがまずいなら
+		// ダイレクトにloopさせてネストがまずいなら
 		// setTimeout()経由で切らないといけないか？
 		(function loop (url, indexPageNo) {
 			console.debug('fetch: ', indexPageNo);
@@ -5588,7 +5586,6 @@ $(document).ready(function(){
 		//
 		this.alwaysOpenDefault = false;
 		//
-		this.maxSectionNo = 0;
 
 		// 連載の基礎判定はここでする
 		// 短編or目次系ページの判定は中身次第
@@ -5600,6 +5597,7 @@ $(document).ready(function(){
 		} else {
 			// 本来formatがあっていてcreateされているはずなので有りえない
 		}
+		this.maxSectionNo = this.secId;
 	}
 
 	HamelnSite.siteInfo = {
@@ -5612,7 +5610,13 @@ $(document).ready(function(){
 	// ハーメルンの場合は短編の場合、
 	// 作品topページ=コンテンツページなので、
 	// コンテンツページに限定することはできない
-	HamelnSite.parseURL = function (url) {
+	HamelnSite.parseURL = function (url, relative) {
+		if (relative === true) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.siteInfo.site + url;
+		}
 		var m = this.siteInfo.$reURL.exec(url);
 		if (m) {
 			return {
@@ -5635,6 +5639,25 @@ $(document).ready(function(){
 		$getNovelSectionURL:		'{{:site}}{{:ncode}}/{{:sectionId}}.html',
 	};
 
+	// 相対pathなら絶対path化する
+	HamelnSite.prototype.$toAbsoluteURL = function (url) {
+		if (!url.startsWith(this.siteInfo.site)) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.$getSiteURL ({path: url});
+		}
+		return url;
+	};
+
+	// TOCだと'./1.html'のような形式らしい
+	HamelnSite.prototype.$getSectionIdFromURL = function (url) {
+		var m = /(\d+)\.html$/.exec (url);
+		if (m) {
+			return parseInt(m[1]);
+		}
+		return null;
+	};
 
 
 	// ctorではできない他Managerとの間の処理等
@@ -5651,24 +5674,13 @@ $(document).ready(function(){
 			bgImage: null,
 		});
 
-		this.indexDeferred = new $.Deferred();
-		// deferredで非同期に呼ばれるのだからbindしておかないとまずい
-		this.AsyncFetchIndexPage(this.indexDeferred)
-			.then(this.$finishIndexPage.bind(this));
+		// まだ目次ページ排除していないのでfetchIndexはできない
 	};
 
-	// 自動loadIndexさせないとsecNoのendが分からない
 	// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
-	// 機能的にはUIがreadyになって以降の裏処理の開始
 	HamelnSite.prototype.onReadyNoja = function () {
-		return this.indexDeferred.then(function (indexTable) {
-			// メイン側ready後に呼ばれてdoneに繋げるので、
-			// これが動くときは確実にメインもindexerもready/done状態
-			// 構築済のテーブルをgIndexManagerに渡してOk
-			// 中身は<table>構造
-			// 統一するなら、前書きやらタイトルやらつけないといけない
-			gIndexManager.makeIndex(indexTable);
-		});
+		// 目次取得はもう少し早いタイミング
+		// (初期ページのparse最後)
 	};
 
 	HamelnSite.prototype.onOpenNoja = function () {
@@ -5698,15 +5710,18 @@ $(document).ready(function(){
 	};
 
 
-	// ajaxでページを読み込む
 	// Deferred objectを返す
-	HamelnSite.prototype.getNovelSection = function (section) {
+	HamelnSite.prototype.getNovelSection = function (secId) {
+		var self = this;
 		if (!gNetworkManager.acquire()) {
 			return new $.Deferred().reject().promise();
 		}
-		return $.get(this.$getNovelSectionURL ({sectionId: section}))
+		return $.get(this.$getNovelSectionURL ({sectionId: secId}))
 		.always(function () {
 			gNetworkManager.release();
+		}).then(function (htmldoc) {
+			return new $.Deferred()
+				.resolve(self.parseHtmlContents(htmldoc, secId));
 		});
 	};
 
@@ -5720,18 +5735,25 @@ $(document).ready(function(){
 	};
 
 
-	HamelnSite.prototype.isSectionInRangeLowerBound = function (sec) {
-		return (sec >= 1);
-	};
 
-	//HamelnSite.prototype.isSectionInRangeLowerBound = function (sec) {
-	//	return (sec >= 1);
-	//};
+	// 
+	HamelnSite.prototype.getNextSection = function (secId) {
+		var newSecId = secId + 1;
+		return (newSecId <= this.maxSectionNo) ? newSecId : secId;
+	};
+	HamelnSite.prototype.getPrevSection = function (secId) {
+		var newSecId = secId - 1;
+		return (newSecId >= 1) ? newSecId : secId;
+	};
 	HamelnSite.prototype.isLoadableSection = function (sec) {
 		return (sec <= this.maxSectionNo);
 	};
-	HamelnSite.prototype.updateMaxSection = function (sec, force) {
-		this.maxSectionNo = (force === true) ? sec : Math.max(this.maxSectionNo, sec);
+	// 目次から話数が取れていても読んでいるうちに更新された時など
+	// 変化するのでupdateが必要
+	// 殆ど内部用途だが、現状restore,import等から使われるので
+	// public扱い
+	HamelnSite.prototype.updateMaxSection = function (secId, force) {
+		this.maxSectionNo = (force === true) ? secId : Math.max(this.maxSectionNo, secId);
 	};
 
 
@@ -5763,9 +5785,34 @@ $(document).ready(function(){
 	// pの中に本文が埋まっているケースもあるので
 	// font size=+2のあと、font size=+1の前で取る
 	// タイトル～サブタイトルの間
+	// link解析がindexのa書き換えと同じなのでprivate methodでまとめる
+	// nobel_bnは上下2か所になるので上だけ使う
+	// @@ TODO @@
+	HamelnSite.prototype.$updateRelativeSectionAtSection = function (contents, secId) {
+		if (false) {
+			var relativeLinks = contents.find('#novel_color > div.novel_bn:eq(0) > a');
+			var maxSecId = secId;
+			var self = this;
+			if (relativeLinks.size()) {
+				relativeLinks.each (function() {
+					var url = $(this).attr('href');
+					//console.debug('got relative link', url);
+					var relSecId = self.$getSectionIdFromURL(url);
+					if (relSecId !== null) {
+						maxSecId = Math.max(maxSecId, relSecId);
+					}
+				});
+			}
+			//console.debug('update max', maxSecId);
+			this.updateMaxSection (maxSecId);
+		}
+	};
+
+
 	//
 	// カラー指定の扱いとtoken関連は調整がいる
 	HamelnSite.prototype.$parseHtmlCommon = function (contents, section) {
+		this.$updateRelativeSectionAtSection (contents, section);
 		// 著者はfontの直後のa
 		this.siteInfo.author = $('p:eq(0) > font[size="+2"]:eq(0) + a:eq(0)', contents).text();
 		//console.debug("author:", this.siteInfo.author);
@@ -5918,6 +5965,19 @@ $(document).ready(function(){
 			$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a')
 				.attr('data-noja', gCurrentManager.id);
 		}
+
+		////////////////////////////////////////
+		// 文章ページと確定したので目次を取得する
+		if (!this.isSingleSection) {
+			this.loadIndex ().then(
+				function (tocInfo) {
+					// 登録処理
+					gIndexManager.registIndex (tocInfo);
+				}
+				// errorならそのまま？
+			);
+		}
+		//////////////////////////////////////
 		return dfrd.resolve ();
 	};
 
@@ -5945,94 +6005,76 @@ $(document).ready(function(){
 	HamelnSite.prototype.$parseIndexPage = function (htmldoc) {
 
 		var self = this;
-		var indexPage = $($.parseHTML(htmldoc));
+		var indexPage = $($.parseHTML(htmldoc)).find('#maind');
+		var info = indexPage.find('div.ss:eq(0)');
 		var tocInfo = {
-			totalSections: 0,
-			//series:      null,
-			title:       $('#LookNovel', indexPage),
-			author:      $('div.story', indexPage),
-			description: $('div.story', indexPage),
-			index:       $('table.list', indexPage),
+			totalSections: this.maxSectionNo,
+			//series:      null,	// ない場合は項目自体なしでOk
+			title:       info.find('font[size="+2"]:eq(0)'),
+			author:      info.find('a:eq(0)'),	// 本当はtitleの後というほうが正しい？
+			description: indexPage.find('div.ss:eq(1)'),	// 後ろにhrが付いている
+			index:       indexPage.find('div.ss:eq(2)'),
 		};
+		console.debug(tocInfo);
 
-		// '#maind'はbody直下ではないからOkのはず
-		var index = $('#maind > div.ss:lt(3)', indexPage);
+		// titleとauthorについては内部で持っているものと違うなら更新
+		// 別に不要なので放置
+		// 本来はlink位置の調整がいるがroot path指定ならいらない
+		// authorのリンクはフルURLなので不要
+		// descriptionもすることがない
 
-		var indexDiv = indexFrame.$div ();
-		indexDiv.html(index);
-
-		// @@ タグ等引っ張ってきた部分にlinkがあれば
-		// @@ 目次階層とコンテンツ階層でリンク補正が必要になる
-
-		// これは付けたものによる
-		//self.author = $('.novel_writername', indexDiv)
-		//	.contents()
-		//	.not('a[href^="'+self.$getShioriPrefixURL()+'"]')
-		//	.text().slice(3);
-
-		// レイアウト等の調整は放置
-		// htmlやcssでいじるほうがいいのかどうか…
-		var secNo = 0;
-		var maxSecNo = 0;
-		$('div.ss:eq(2) a', indexDiv).each(function() {
-			var no = $(this).attr('href').match(/([0-9]+)\.html$/)[1];
-			maxSecNo = Math.max(maxSecNo, no);
-			var indexItemStyle = {
-				'cursor': 'pointer',
-			};
-			$(this).attr('href', null)
-				.css(indexItemStyle)
-				.bind('click'
-					, autoHideClickJumpHandlerFactory (indexFrame
-						, ++secNo, FIRST_PAGE_NO)
-			);
+		// index部分
+		// href無効化、css設定、click handler設定
+		// 多分、urlからsecIdを出すほうがいいはず
+		// マウスカーソルをlinkクリック可能な表示に変えるためのcss指定
+		var indexItemStyle = {
+			'cursor': 'pointer',
+		};
+		var totalSections = 0;
+		var maxSectionNo = 0;
+		$(tocInfo.index).find('a').each(function () {
+			var url = $(this).attr('href');
+			var secId = self.$getSectionIdFromURL(url);
+			if (secId !== null) {
+				$(this).attr('noja_jumpTo', secId);
+				maxSectionNo = Math.max(maxSectionNo, secId);
+				++totalSections;
+			}
+			$(this).attr('href', null)		// @@ TODO @@ Javascript側のcleanup
+			.css(indexItemStyle)
+			;
 		});
-		return {totalSections: maxSecNo, toc: null};	// とりあえず現状ダミー
+		if (totalSections != maxSectionNo) {
+			console.debug('totalSections != maxSectionNo', totalSections, maxSectionNo);
+		}
+		// コンテンツ更新されるタイミングもあるので更新する
+		this.updateMaxSection (maxSectionNo);
+		tocInfo.totalSections = maxSectionNo;
+		return tocInfo;
 	};
 
-	// 内部で持つ情報は更新しても
-	// globalな情報は呼出し元で更新させる
+	// indexは帯域制御外とする
+	// ただし、自分自身の多重loadだけは避ける
 	HamelnSite.prototype.loadIndex = function () {
-		var dfrd = new $.Deferred();
-		var self = this;
-		if (!gNetworkManager.acquire()) {
-			return dfrd.reject().promise();
+		// 既に動いている途中ならそれを返す
+		if (('deferredFetchIndex' in this)
+			&& this.deferredFetchIndex !== null
+			&& this.deferredFetchIndex.state() == 'pending') {
+			return this.deferredFetchIndex;
 		}
-		$.get (this.$getNovelIndexURL()).always(function () {
-			gNetworkManager.release();
-		}).then(
+		// 初回or完了済の更新
+		var self = this;
+		this.deferredFetchIndex = $.get (this.$getNovelIndexURL()).then(
 			// success: .done
 			function (htmldoc) {
 				var tocInfo = self.$parseIndexPage (htmldoc);
-				dfrd.resolve (tocInfo);
-			},
-			// error: .fail
-			function () {
-				console.debug ('load index: failed');
-				dfrd.reject ();
+				return new $.Deferred().resolve (tocInfo).promise();
 			}
+			// error: そのままgetのfailを返す
 		);
-		return dfrd.promise();
+		return this.deferredFetchIndex.promise();
 	};
 
-	// 非同期にmaxだけもらうことはできないのでloadIndexする
-	// callbackの仕様が同一なのでそのままrelayするだけ?
-	// と思ったが折角loadIndexするのでready設定はすべき
-	// 小説情報ページ等から取ってくる手もあるが、
-	// どうせhtmldocを1ページ取得するならindexのほうがいい
-	HamelnSite.prototype.loadMaxSectionNo = function () {
-		var dfrd = new $.Deferred();
-		this.loadIndex().then(
-			function (maxSectionNo) {
-				gIndexManager.setIndexPageReady();
-				dfrd.resolve (maxSectionNo);
-			},
-			function () {
-				dfrd.reject ();
-			}
-		);
-		return dfrd.promise ();
-	};
 
 	// Deferred interface
 	HamelnSite.prototype.importInitialContents = function () {
@@ -6045,14 +6087,7 @@ $(document).ready(function(){
 		return  url;
 	};
 
-	// 
-	HamelnSite.prototype.getNextSection = function (secId) {
-		return ++secId;
-	};
 
-	HamelnSite.prototype.getPrevSection = function (secId) {
-		return --secId;
-	};
 
 	//////////
 
@@ -6140,9 +6175,6 @@ $(document).ready(function(){
 		this.alwaysOpenDefault = false;
 
 
-		this.maxSectionNo = 0;
-		this.secId = 1;
-
 		var m = this.parseURL (url);
 		if (m) {
 			this.siteInfo.ncode = m.novelId;
@@ -6151,6 +6183,7 @@ $(document).ready(function(){
 		} else {
 			// 本来formatがあっていてcreateされているはずなので有りえない
 		}
+		this.maxSectionNo = this.secId;
 	}
 
 	PixivSite.siteInfo = {
@@ -6161,7 +6194,13 @@ $(document).ready(function(){
 		// http://www.pixiv.net/novel/show.php?id={{:novelId}}
 		$reURL: /http:\/\/www\.pixiv\.net\/novel\/show.php\?id=(\d+)/,
 	};
-	PixivSite.parseURL = function (url) {
+	PixivSite.parseURL = function (url, relative) {
+		if (relative === true) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.siteInfo.site + url;
+		}
 		var m = this.siteInfo.$reURL.exec(url);
 		if (m) {
 			return {
@@ -6181,6 +6220,16 @@ $(document).ready(function(){
 		//$getNovelIndexURL:			'{{:site}}{{:ncode}}/',
 		//$getNovelSectionURL:		'{{:site}}{{:ncode}}/{{:sectionId}}/',
 	};
+	// 相対pathなら絶対path化する
+	PixivSite.prototype.$toAbsoluteURL = function (url) {
+		if (!url.startsWith(this.siteInfo.site)) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.$getSiteURL ({path: url});
+		}
+		return url;
+	};
 
 
 	// ctorではできない他Managerとの間の処理等
@@ -6199,9 +6248,9 @@ $(document).ready(function(){
 		});
 	};
 
-	// 自動loadIndexさせてもいいのだがどうしよう？
+	// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
 	PixivSite.prototype.onReadyNoja = function () {
-		// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
+		//
 	};
 
 	PixivSite.prototype.onOpenNoja = function () {
@@ -6233,7 +6282,7 @@ $(document).ready(function(){
 
 
 	// Deferred interface
-	PixivSite.prototype.getNovelSection = function (section) {
+	PixivSite.prototype.getNovelSection = function (secId) {
 		return $.Deferred().reject().promise();
 	};
 
@@ -6243,15 +6292,19 @@ $(document).ready(function(){
 	};
 
 
-	PixivSite.prototype.isSectionInRangeLowerBound = function (sec) {
-		return (sec >= 1);
-	};
 
-	PixivSite.prototype.isLoadableSection = function (sec) {
-		return (sec <= this.maxSectionNo);
+	PixivSite.prototype.getNextSection = function (secId) {
+		return secId;
 	};
-	PixivSite.prototype.updateMaxSection = function (sec, force) {
-		this.maxSectionNo = (force === true) ? sec : Math.max(this.maxSectionNo, sec);
+	PixivSite.prototype.getPrevSection = function (secId) {
+		return secId;
+	};
+	PixivSite.prototype.isLoadableSection = function (sec) {
+		return false;
+		//return (sec <= this.maxSectionNo);
+	};
+	PixivSite.prototype.updateMaxSection = function (secId, force) {
+		//this.maxSectionNo = (force === true) ? secId : Math.max(this.maxSectionNo, secId);
 	};
 
 
@@ -6393,11 +6446,6 @@ $(document).ready(function(){
 		return new $.Deferred().reject().promise();
 	};
 
-	// Deferred interface
-	PixivSite.prototype.loadMaxSectionNo = function () {
-		return new $.Deferred().resolve(1).promise();
-	};
-
 
 	// Deferred interface
 	PixivSite.prototype.importInitialContents = function () {
@@ -6411,13 +6459,6 @@ $(document).ready(function(){
 	};
 
 	// 
-	PixivSite.prototype.getNextSection = function (secId) {
-		return secId;
-	};
-
-	PixivSite.prototype.getPrevSection = function (secId) {
-		return secId;
-	};
 
 
 	//////////
@@ -7079,94 +7120,15 @@ $(document).ready(function(){
 	////////////////////////////////////////////////////////
 	// これ全体gIndexManagerに収容すべき
 	////////////////////////////////////////////////////////
-	//各話の各ページにジャンプする関数。toPageに負の値を渡すと最後尾ページにジャンプ。
 
-	//関数に直接くっつけたので不要
-	//読み込み中にセットされるページとセクション番号。
-	//読み込み前に保存した数が終了後と同じだったらそのまま新しく読み込んだ話にジャンプ
-	//そうでなかったらユーザーの操作で移動したことになるため、ジャンプしない
-	var gLoadSectionInfo = {
-		pageNo: 0,
-		sectionId: 0,
-		set: function (sectionId, pageNo) {
-			this.sectionId = sectionId;
-			this.pageNo = pageNo;
-		},
-		equals: function (secionId, pageNo) {
-			return (this.sectionId == section.id) && (this.pageNo == pageNo);
-		},
-	};
 
-	// rangeオーバー理由の判定は不要になった。
+	// rangeオーバー理由の判定は不要になったのと
+	// maxSectionのdeferredな取得はなしにしたので構造が単純化
 	var gLoadSectionManager = {
-		ERROR_FIRST_SECTION: -1,
-		ERROR_LAST_SECTION:  -2,
-		ERROR_REQUESTED_SECTION:  -3,	// 読み込み中
-		ERROR_NETWORK_FAILED: -4,		//
+		ERROR_INVALID_SECTION:   -1,	// 
+		ERROR_REQUESTED_SECTION: -2,	// 読み込み中
+		ERROR_NETWORK_FAILED:    -3,	//
 		interval: 100,
-		// ・存在が確認済の場合:無条件にload
-		// ・最大話数が取得されていないなら取得しチェックしてからload
-		// ・取得途中なら待ち
-		isSectionLoadable: function (section) {
-			var dfrd = new $.Deferred();
-			var self = this;
-			if (gSiteParser.isLoadableSection(section)) {
-				// idタイプのサイトの場合は現在把握しているidならOkを返す
-				// 数値番号サイトの場合は把握している大小関係で決める
-				// 読み込まれていないが現在の最大セクションよりも小さいセクションを
-				// 要求した場合は確実に存在するのでロードすればよい
-				return dfrd.resolve(section).promise();
-			} else if (gIndexManager.isGeneralAllNoStatusUndefined()) {
-				console.debug('load max section no');
-				//話数カウントされていない場合
-				//読み込み中をマーク
-				gIndexManager.setGeneralAllNoStatusLoading();
-				statusFrame.showLoading ();
-				gSiteParser.loadMaxSectionNo().then(
-					// 成功
-					function (maxSectionNo) {
-						//話数を設定
-						gIndexManager.forceSetGeneralAllNo(maxSectionNo);
-						if (section <= gIndexManager.GeneralAllNo) {
-							// 存在が確認できたのでload Ok
-							dfrd.resolve(section);
-						} else {
-							console.debug('isSectionLoadable: last sec error', maxSectionNo, section);
-							dfrd.reject(self.ERROR_LAST_SECTION);
-						}
-					},
-					// 失敗
-					function (err) {
-						console.debug('isSectionLoadable: api failed:', err, section);
-						gIndexManager.setGeneralAllNoStatusUndefined();
-						dfrd.reject(self.ERROR_NETWORK_FAILED);
-					}
-				);
-			} else if (gIndexManager.isGeneralAllNoStatusLoading()) {
-				// 他reqによる取得中でまだ完了してないなら
-				var wait_for_section_info = function() {
-					if (gIndexManager.isGeneralAllNoStatusLoading()) {
-						// まだ終わってないなら待ち
-						setTimeout (wait_for_section_info, self.interval);
-					} else if (gIndexManager.isGeneralAllNoStatusUndefined()) {
-						// 他req完了したが、最大セクション数不明(getがエラー)
-						dfrd.reject(self.ERROR_NETWORK_FAILED);
-					} else {
-						if(section > gIndexManager.GeneralAllNo) {
-							// ジャンプ先セクションが最大を超える場合はエラー
-							console.debug('isSectionLoadable: last sec error: api complete but GAN is bad:', gIndexManager.GeneralAllNo, section);
-							dfrd.reject(self.ERROR_LAST_SECTION);
-						} else {
-							// 情報取得しおわり、セクション指定も範囲内と確認できたので
-							// 実体のコンテンツ取得を呼ぶ
-							dfrd.resolve(section);
-						}
-					}
-				};
-				setTimeout (wait_for_section_info, self.interval);
-			}
-			return dfrd.promise();
-		},
 		// secNoのセクションがSectionManagerのDBにあるかどうかは関係なく
 		// 指定されたsecNoのものを読んでくる
 		// rawなI/Fとして常に指定secNoのものを読むモード
@@ -7175,8 +7137,9 @@ $(document).ready(function(){
 			if (force === undefined) {
 				force = false;
 			}
-			var dfrd = new $.Deferred();
 			var self = this;
+			// load開始直前の通知がいるので自前のdfrdがいる
+			var dfrd = new $.Deferred();
 			// まずSectionManagerのもつキャッシュに問い合わせ
 			// 再読み込みではないケースで、既にDB上にある
 			if (!force && gSectionManager.isSectionReady(secNo)) {
@@ -7186,69 +7149,48 @@ $(document).ready(function(){
 			if (gSectionManager.isSectionLoading(secNo)) {
 				return dfrd.reject(self.ERROR_REQUESTED_SECTION).promise();
 			}
-
-
-			////////// ここら辺はなんとかする
-			// 次にIndexManagerで範囲の正当性を問い合わせ
-			// 下限エラー
-			if (!gIndexManager.isSectionInRangeLowerBound(secNo)) {
-				return dfrd.reject(self.ERROR_FIRST_SECTION).promise();
+			// 読み込み可能なセクションかを問い合わせて確認する
+			if (!gSiteParser.isLoadableSection(secNo)) {
+				return dfrd.reject(self.ERROR_INVALID_SECTION).promise();
 			}
-			// 上限エラー: 最大セクション不定のときはエラーにしない
-			if (!gIndexManager.isSectionInRangeUpperBound(secNo)) {
-				console.debug('load: gIndexManager return exceed upper bound:', gIndexManager.GeneralAllNo, secNo);
-				return dfrd.reject(self.ERROR_LAST_SECTION).promise();
-			}
-			// まだ読み込まれていない場合は
-			// まずmax情報を確認する
-			// 読み込み中はtrueをマークする
+			// ステータスを読み込み中にして処理開始
 			gSectionManager.setStatusLoading(secNo);
-			self.isSectionLoadable(secNo).then(function () {
-				dfrd.notify(secNo);		// progress通知
-				// 指定secNoを読み込む
-				return gSiteParser.getNovelSection (secNo).then (
-					function (data) {
-						//console.debug('load success', data);
-						// 成功した場合はデータを登録
-						// この場合、読み込み前にLoadingにしてあるので
-						// forceにしないとまずい？
-						// そこは直したが、
-						// gSectionManager.setStatusInvalid(secNo);
-						var secData = gSectionManager.registData (secNo
-							, gSiteParser.parseHtmlContents(data, secNo), true);
-						autoPagerize (secData, secNo);
-						gSiteParser.updateMaxSection(secNo);
-						// 新しいsecNoを登録したので自動saveするならsaveが動く
-						if (gSetting.autoSave) {
-							nojaSave(false);
-						}
-						dfrd.resolve(secNo, true);
-					},
-					function () {
-						console.debug('siteParser said error');
-						return new $.Deferred()
-							.reject(self.ERROR_NETWORK_FAILED).promise();
+			// 開始することを通知
+			dfrd.notify();
+			gSiteParser.getNovelSection (secNo).then (
+				function (secData) {
+					// 登録でstatusも更新される
+					var secData
+						= gSectionManager.registData (secNo, secData, true);
+					autoPagerize (secData, secNo);
+					gSiteParser.updateMaxSection(secNo);
+					// 新しいsecNoを登録したので自動saveするならsaveが動く
+					if (gSetting.autoSave) {
+						nojaSave(false);
 					}
-				);
-			}).fail(function(err) {
-				console.debug('loadable check failed or load failed', err);
-				// loadableチェック失敗 or loadそのものが失敗
-				//失敗時はfalseをマークする。
-				// これはまずい: reloadのときは別にいらない
-				gSectionManager.setStatusInvalid(secNo);
-				dfrd.reject(err);
-			});
+					dfrd.resolve(secNo, true);
+				},
+				function () {
+					gSectionManager.setStatusInvalid(secNo);
+					console.debug('siteParser said error');
+					dfrd.reject(self.ERROR_NETWORK_FAILED);
+				}
+			);
 			return dfrd.promise();
 		},
 	};
 
 
+	//各話の各ページにジャンプする関数。
+	//toPageに負の値を渡すと最後尾ページにジャンプ。
 	// goTo経由で来た場合、lower,upperのチェックは済んでいる
 	// その他の直接呼出しだとrange関連は未解決だが、
 	// 範囲外でinvaliになるかどうかだけが問題で、
 	// 上限・下限オーバーのような理由の区別までは不要
 	//
 	// できればjumpToのui機能と非ui機能を分ける?
+	// 一応deferred objectを返すようにしておく
+	// (showPageが終わった段階で発火)
 	jumpTo = function(secNo, toPage) {
 		//isChangeSection===trueなら話移動が必要
 		var force = false;
@@ -7265,7 +7207,7 @@ $(document).ready(function(){
 		}
 		//開始
 		console.debug('jumpTo:', secNo, toPage, gCurrentManager.id, section, force);
-		gLoadSectionManager.load (section, force).then(
+		return gLoadSectionManager.load (section, force).then(
 			function (loadSecNo, isLoaded) {
 				console.debug('load success', loadSecNo, isLoaded);
 				// 実際にロードせずにdbにあった場合は!isLoaded
@@ -7287,11 +7229,8 @@ $(document).ready(function(){
 			function (err) {
 				console.debug('load failed', err);
 				switch (err) {
-				case gLoadSectionManager.ERROR_FIRST_SECTION:
-					console.debug("gIndexManager: first section error: section", section);
-					break;
-				case gLoadSectionManager.ERROR_LAST_SECTION:
-					console.debug("gIndexManager: last section error: GeneralAllNo, section", gIndexManager.GeneralAllNo, section);
+				case gLoadSectionManager.ERROR_INVALID_SECTION:
+					console.debug("gIndexManager: invalid section error: section", section);
 					break;
 				case gLoadSectionManager.ERROR_REQUESTED_SECTION:
 					console.debug("gIndexManager. already requested error: section", section);
@@ -7304,7 +7243,7 @@ $(document).ready(function(){
 				}
 			},
 			function () {	// 実際のロード開始直前に呼ばれるprogress
-				console.debug('load started async');
+				console.debug('load started async: jumpTo.waiting=true');
 				jumpTo.waiting = true;
 			}
 		).then(function () {
@@ -7319,19 +7258,21 @@ $(document).ready(function(){
 				toPage += nPages;
 			}
 			console.debug('(mod)toPage:', toPage);
-			// @@ 単ページモード対応済
-			toPage = gCurrentManager.getFirstPageAlinedCanvas(toPage);	// 偶数ページ化(右ページ)
+			// 先頭ページにアライメント
+			toPage = gCurrentManager.getFirstPageAlinedCanvas(toPage);
 			console.debug('(mod2)toPage:', toPage);
 
 			// 次話強制ではない場合、
 			// 同ページのまま or toPageの計算が範囲外なら処理終了
 			if (!isChangeSection
-				&& (toPage == gCurrentManager.page || !(toPage >= 0 && toPage < nPages))) {
+				&& (toPage == gCurrentManager.page
+					|| !(toPage >= 0 && toPage < nPages))) {
 				console.debug('stay same page: current', gCurrentManager.page);
 				console.debug('  toPage nPages', toPage, nPages);
 				return;
 			}
-			jumpTo.pending = false;
+			console.debug('jumpTo.waiting=false');
+			jumpTo.waiting = false;
 
 			// このあたりがちょい問題
 			// reMakeとの同期が取れていないはず(オリジナルから)
@@ -7443,6 +7384,8 @@ $(document).ready(function(){
 	};
 	goTo.$jumpToLocation = function(location) {
 		if (location.valid) {
+			console.debug('location valid: ', location.section, location.page);
+			console.debug('location valid: ', location);
 			jumpTo (location.section, location.page);
 		} else {
 			if (location.direction > 0) {
@@ -8691,8 +8634,10 @@ $(document).ready(function(){
 				// 入れ替えのときは大元のタグからごっそり入れ替えているので
 				// それで切り替わる
 				downloadFileManager.setColorTheme (imported_infos);
-				// import側でmax有効でIndexManager側でも同様なら必要ならupdate
-				if (imported_infos.generalAllNo && gIndexManager.isGeneralAllNoStatusReady) {
+				// import側でmax有効でgIndexManager側でも同様に有効なら
+				// max比較してupdate
+				// とりあえず常にgIndexManager側では有効だとしてしまう
+				if (imported_infos.generalAllNo) {
 					// これはupdate max
 					gIndexManager.GeneralAllNo = imported_infos.generalAllNo;
 				}
@@ -8713,14 +8658,7 @@ $(document).ready(function(){
 			gCurrentManager.setCurrent (gCurrentManager.id);
 			// 作品が切り替わった時は上でforceSetしている
 			// その値自体がunavailの可能性はあるのか。
-			if (gIndexManager.isGeneralAllNoStatusReady()) {
-				// これはupdate max
-				gIndexManager.GeneralAllNo = imported_infos.generalAllNo;
-			} else {
-				// IndexManager側で未確定状態なら
-				gIndexManager.setGeneralAllNoUndefined();
-				gSiteParser.updateMaxSection(gSectionManager.length(), true);
-			}
+			gIndexManager.GeneralAllNo = imported_infos.generalAllNo;
 			// ui関連の設定
 			gSiteParser.rebuildFormsOnImportRestore ();
 			updateSettingMenuCheckbox();
@@ -8973,7 +8911,6 @@ $(document).ready(function(){
 				gIndexManager.generalAllNo = restoreData.generalAllNo;
 			} else {
 				// なければIndex側未定義にしてgSiteParserはmax更新扱い
-				gIndexManager.setGeneralAllNoStatusUndefined();
 				gSiteParser.updateMaxSection(gSectionManager.length(), true);
 			}
 			gSiteParser.setNovelId(restoreData.ncode);
@@ -9426,8 +9363,6 @@ $(document).ready(function(){
 
 
 			validateSetting ();
-			gLoadSectionInfo.set (gCurrentManager.id, 0);
-			gSiteParser.updateMaxSection (gCurrentManager.id, true);
 			updateSettingMenuCheckbox (false);
 
 			$('#noja_always_open').prop('checked', gAlwaysOpen);
