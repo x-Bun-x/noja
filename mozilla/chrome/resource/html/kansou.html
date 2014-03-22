@@ -3,15 +3,19 @@
   <div class="hyoukanavi_title">―　感想を書く　―</div>
   <form method="post" target="_blank">
    <div style="text-align:left; margin-left:30px;">
-    <a id="noja_impression_list" style="color:#0033cc;" target="_blank">⇒感想一覧を見る</a><br />
+    <a id="noja_impression_list" style="color:#0033cc;" target="_blank">⇒感想一覧を見る</a>
+    <br />
     <div id="noja_impression_usertype"></div>
-    <div style="margin: 10px 0px 10px 0px; font-size:90%;">▼良い点<br />
+    <div style="margin: 10px 0px 10px 0px; font-size:90%;">
+     ▼良い点<br />
      <textarea cols="45" rows="3" name="goodcomment"></textarea>
     </div>
-    <div style="margin: 10px 0px 10px 0px;">▼悪い点<br />
+    <div style="margin: 10px 0px 10px 0px;">
+     ▼悪い点<br />
      <textarea cols="45" rows="3" name="badcomment"></textarea>
     </div>
-    <div style="margin: 10px 0px 0px 0px;">▼一言<br />
+    <div style="margin: 10px 0px 0px 0px;">
+     ▼一言<br />
      <textarea cols="45" rows="5" name="hitokoto"></textarea>
     </div>
     <br />
@@ -25,22 +29,36 @@
    </div>
   </form>
  </div>
- <div id="noja_r_fc" style="display:none;"><div class="hyoukanavi_title">―　お薦めレビューを書く　―</div>
+ <div id="noja_r_fc" style="display:none;">
+  <div class="hyoukanavi_title">―　お薦めレビューを書く　―</div>
   <span class="attention">※</span>は必須項目です。
   <form id="formtable" method="post" target="_blank">
    <div style="text-align:left; margin-left:30px;">
-   <a id="noja_novelreview_list" style="color:#0033cc;" target="_blank">⇒レビュー一覧を見る</a><br />
+   <a id="noja_novelreview_list" style="color:#0033cc;" target="_blank">⇒レビュー一覧を見る</a>
+   <br />
     <div id="noja_novelreview_usertype"></div>
-   <div style="font-weight:bold; margin-top:10px;"><span class="attention">※</span>レビュータイトル</div>
+   <div style="font-weight:bold; margin-top:10px;">
+    <span class="attention">※</span>レビュータイトル
+   </div>
    <div style="margin-bottom:10px;">
-    <input type="text" name="reviewtitle" value="" size="60" /><br />
+    <input type="text" name="reviewtitle" value="" size="60" />
+    <br />
     <label class="form">8文字以上、100文字以内で入力</label>
    </div>
-   <div style="font-weight:bold;"><span class="attention">※</span>レビュー本文</div>
+   <div style="font-weight:bold;">
+    <span class="attention">※</span>レビュー本文
+   </div>
    <div style="margin-bottom:10px;">
-    <textarea cols="45" rows="13" id="novel" name="reviewhonbun" onkeyup="review_charcount();"></textarea><br />
-    <span id="shortmes" class="attention" style="margin-left:0.5em"></span><span id="mes" style="color:olive;"></span><span id="overmes" class="attention"></span><br />
-    <label class="form">空白・改行含まない150文字以上、<br />空白・改行含む400文字以内で入力</label>
+    <textarea cols="45" rows="13" id="novel" name="reviewhonbun" onkeyup="review_charcount();"></textarea>
+    <br />
+    <span id="shortmes" class="attention" style="margin-left:0.5em"></span>
+    <span id="mes" style="color:olive;"></span>
+    <span id="overmes" class="attention"></span>
+    <br />
+    <label class="form">
+     空白・改行含まない150文字以上、<br />
+     空白・改行含む400文字以内で入力
+    </label>
    </div>
    </div>
   </form>

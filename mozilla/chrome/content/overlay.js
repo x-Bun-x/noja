@@ -74,8 +74,8 @@ var onPageLoad = function(e) {
 		/http:\/\/(ncode|novel18)\.syosetu\.com\/n/,
 		/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/\d+\/novel_id~\d+/,
 		/http:\/\/novel\.syosetu\.org\/\d+\/(|index\.html|\d+\.html)/,
-		/http:\/\/www\.pixiv\.net\/novel\/show.php\?id=\d+/
-
+		/http:\/\/www\.pixiv\.net\/novel\/show.php\?id=\d+/,
+		/http:\/\/www\.mai-net\.net\/bbs\/sst\/sst\.php\?act=dump/
 	];
 	var matched = false;
 	var url = document.URL;

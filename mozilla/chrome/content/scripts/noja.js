@@ -544,7 +544,7 @@ $(document).ready(function(){
 	//ダウンロードファイルにコメントで仕込むデータ。
 	var DOWNLOAD_ID = '@noja{7B87A1A7-2920-4281-A6D9-08556503D3E5}';
 
-
+	var gHtmlPortManager;
 
 
 	// 固定パラメータ
@@ -775,13 +775,15 @@ $(document).ready(function(){
 				var item;
 				if (key in tocInfo) {
 					item = tocInfo[key];
-					// linkのclick action登録
-					item.find('[noja_jumpTo]').each(function() {
-						var secNo = parseInt($(this).attr('noja_jumpTo'));
-						$(this).bind('click'
-							, autoHideClickJumpHandlerFactory (indexFrame
-								, secNo, FIRST_PAGE_NO));
-					});
+					if (item.jquery) {
+						// linkのclick action登録
+						item.find('[noja_jumpTo]').each(function() {
+							var secNo = parseInt($(this).attr('noja_jumpTo'));
+							$(this).on('click'
+								, autoHideClickJumpHandlerFactory (indexFrame
+									, secNo, FIRST_PAGE_NO));
+						});
+					}
 				} else {
 					// 登録データになくても、dom上ではデータを作っておかないと
 					// appendやexportするときに手間がかかる
@@ -840,8 +842,16 @@ $(document).ready(function(){
 
 		// もはやimport/restoreくらいしか使わない
 		// gSiteParserに管理はまかせて中継のみ
+		// restore/importでこれがないことによる弊害
+		// * restore:サイト固有のparserなので現状onlineから
+		//   必要情報が取れる前提
+		//   parser側が話数情報を管理するので、updateさせていかないといけない
+		//   (section登録時)
+		//   問題になるのは内部データ形式だと相対リンクが取れない点
+		//   * 最新話ページ表示時点でのrestoreなら問題ないが…
+		//   * 
 		generalAllNo: null,
-		get GeneralAllNo() {
+		get GeneralAllNo () {
 			// cast to number
 			return this.generalAllNo - 0;
 		},
@@ -849,7 +859,7 @@ $(document).ready(function(){
 			this.generalAllNo = x;
 			gSiteParser.updateMaxSection(this.generalAllNo, true);
 		},
-		set GeneralAllNo(x) {
+		set GeneralAllNo (x) {
 			this.forceSetGeneralAllNo (Math.max(this.generalAllNo, x));
 		},
 
@@ -1405,46 +1415,25 @@ $(document).ready(function(){
 			return secId;
 		},
 		// download形式の中身を作る
-		toHtmlDiv: function (secId, secData, prefix) {
-			var s = '<div id="' + prefix + 'section_' + secId + '">\n';
-			if (secData._maegaki) {
-				s += '<div class="' + prefix + 'maegaki">'
-					+ secData._maegaki.replace(RE_G_LINEBREAK, '') + '</div>\n';
-			}
-			if (secData.chapter_title !== '') {
-				s += '<div class="' + prefix + 'chapter_title">'
-					+ $('<div>').text(sectData.chapter_title).html() + '</div>\n';
-			}
-			s += '<div class="' + prefix + 'subtitle">'
-				+ $('<div>').text(secData.subtitle).html() + '</div>\n';
-			s += '<div class="' + prefix + 'honbun">'
-				+ secData._honbun.replace(RE_G_LINEBREAK, '') + '</div>\n';
-			if (secData._atogaki) {
-				s += '<div class="' + prefix + 'atogaki">'
-					+ secData._atogaki.replace(RE_G_LINEBREAK, '') + '</div>\n';
-			}
-			s += '</div>\n';
-			return s;
-		},
-		toDiv: function (secId, secData, prefix) {
-			var divRoot = $('<div id="' + prefix + 'section_' + secId + '">');
-			if (sec._maegaki !== null) {
-				divRoot.append('<div class="' + prefix + 'maegaki">'
-					+ sec._maegaki + '</div>');
-			}
-			if (sec.chapter_title !== '') {
-				divRoot.append('<div class="' + prefix + 'chapter_title">'
-					+ sec.chapter_title + '</div>');
-			}
-			divRoot.append('<div class="' + prefix + 'subtitle">'
-				+ sec.subtitle + '</div>');
-			divRoot.append('<div class="' + prefix + 'honbun">'
-				+ sec._honbun + '</div>');
-			if (sec._atogaki !== null) {
-				divRoot.append('<div class="' + prefix + 'atogaki">'
-					+ sec._atogaki + '</div>');
-			}
-			return divRoot;
+		// html encodeはjsRender
+		// 改行削除だけ行う
+		// jQuery objectを戻すほうは改行除去はなかったが
+		// 機能としては共通化しても問題ないはずなので統一
+		renderToHtmlDiv: $.templates('noja_section_div_template'),
+		toDivHtml: function (secId, secData, prefix) {
+			var param = {
+				idPrefix: prefix,
+				secId: secId,
+				secData: $.extend({}, secData),
+			};
+			$.each({_maegaki: false, _honbun:true, _atogaki:false}
+			, function(key,value) {
+				if (param.secData[key] !== null && param.secData[key] !== '') {
+					param.secData[key]
+						= param.secData[key].replace(RE_G_LINEBREAK, '');
+				}
+			});
+			return this.renderToHtmlDiv(param);
 		},
 		restore: function (sourceSections, fn, with_overwrite) {
 			if (with_overwrite === undefined) {
@@ -1524,6 +1513,9 @@ $(document).ready(function(){
 			endSecNo = (endSecNo === undefined) ? srcDB.length : endSecNo;
 			data = (data === undefined) ? {} : data;
 
+			// index部分を作る
+			// or結合なselectorなので4要素のものが戻ってきて
+			// それをそのままindexに入れるのが元仕様
 			if (gIndexManager.isIndexPageReady()) {
 				data.index = $('<div>')
 					.append(gSiteParser.selectNojaIndexData().clone())
@@ -1535,13 +1527,14 @@ $(document).ready(function(){
 			data.generalAllNo = Math.max (gIndexManager.GeneralAllNo, data.generalAllNo);
 			data.title = gSiteParser.getTitle();
 			data.color = gThemeManager.color.color;
-		// 内部形式でのdumpになる
+			// 内部形式でのdumpになる
 			data.bgColor = gThemeManager.color.bgColor;
 			data.auther = gSiteParser.getAuthor();
 			data.bgImage = gThemeManager.color.bgImage
 				? $(gThemeManager.color.bgImage).attr('src') : null;
+
 			//セクションデータ
-			for(var i = startSecNo; i < endSecNo.length; ++i) {
+			for (var i = startSecNo; i < endSecNo.length; ++i) {
 				var sec = srcDB[i].secData;
 				if (sec === null || (gSetting.oldData && i in data.sections)) {
 					continue;
@@ -1555,7 +1548,6 @@ $(document).ready(function(){
 				};
 			}
 		},
-		// autoPagerize(secData, secId)は微妙にManagerが管理すべきか悩む
 	};
 
 	//////////////////////////////
@@ -1720,6 +1712,13 @@ $(document).ready(function(){
 			gGlobalSettingManager.save ('slidePos', gSlidePos);
 		}
 	};
+
+	// valueは[0.083... , 200.083..]が実測値
+	var slidePos2ZoomRatio = function (value) {
+		return Math.pow(2, (200 - value) / 100);
+	};
+
+
 	//縦書リーダーなのに横書で読みたいという酔狂な人のために
 	var gYokogaki = true;
 	var setGlobalYokogaki = function (value, with_save) {
@@ -1971,25 +1970,152 @@ $(document).ready(function(){
 		};
 	};
 
+	////////////////////////////////////////////////////////
+
+	// colorTheme関連はどこから取るかはsite毎だが、
+	// 値を管理するのは別にサイト側objectでする必要はない
+	// 内部形式同士の場合はbgColor,bgImageで
+	// cssの場合はbackground-color等
+	// backgroundColorはDOM？
+	var gThemeManager = {
+		color: {
+			color: '#000',
+			bgColor: '#ffffff',
+			bgImage: null,
+		},
+		// onLoad handlerはどうせ変更することはなかろう
+		onLoadHandler: showPage,
+
+		$setBackgroundByUrl: function (theme, url) {
+			theme.bgImage = $('<img>').get(0).attr('src', url);
+			if (this.onLoadHander !== undefined) {
+				theme.bgImage.on('load', this.onLoadHandler);
+			}
+			return theme;
+		},
+
+		// 引数は([theme], props|jquery)で省略時はthis.color
+		// 省略時の戻りはthisそのもの(theme指定時はthemeを戻す)
+		// bgImageを設定した時、bgColorを適切に設定するのは呼出し側の責務
+		// ただし、ctxの場合はこちらで行う
+		setColorTheme: function (theme, props) {
+			var ret = theme;
+			if (props === undefined) {
+				props = theme;
+				theme = this.color;
+				ret = this;
+			}
+			if (props.jquery) {
+				var ctx = props;
+				theme.color = ctx.css('color');
+				this.setBackground (theme, ctx);
+			} else {
+				$.extend(theme, props);
+				if (theme.bgImage !== null
+					&& theme.bgImage !== 'none' && theme.bgImage !== '') {
+					this.$setBackgroundByUrl(theme, theme.bgImage);
+					// theme.bgColor = '#ffffff';
+				}
+			}
+			return ret;
+		},
+		setBackground: function (theme, ctx) {
+			var ret = theme;
+			if (ctx === undefined) {
+				ctx = theme;
+				theme = this.color;
+				ret = this;
+			}
+			theme.bgImage = ctx.css('background-image');
+			theme.bgColor = ctx.css('background-color');
+			if (theme.bgImage === null
+				|| theme.bgImage === 'none' || theme.bgImage === '') {
+				theme.bgImage = null;
+			} else {
+				var url = this.bgImage.match(/^url\(([^\)]*)\)/)[1];
+				this.$setBackgroundByUrl (theme, url);
+				theme.bgColor = '#ffffff';
+			}
+			return ret;
+		},
+		toTextColorTheme: function () {
+			var s = 'color: ' + this.color.color + ';'
+				+ 'background-color: ' + this.color.bgColor + ';'
+				;
+			if (this.color.bgImage) {
+				s += 'background-image: url(' + this.color.bgImage.src + ');';
+			}
+			return s;
+		},
+		toCssColorTheme: function (dest) {
+			if (dest === undefined) {
+				dest = {};
+			}
+			dest.color = this.color.color;
+			dest.backgroundColor = this.color.bgColor;
+			dest.backgroundImage = (this.color.bgImage === null) ? null
+					: 'url(' + this.color.bgImage.src + ')';
+			return dest;
+		},
+		// onloadはいいのかな？
+		applyColorTheme: function (ctx, theme) {
+			if (theme === undefined) {
+				theme = this.color;
+			}
+			ctx.css({
+				color: theme.color,
+				backgroundColor: theme.bgColor,	// DOM css name?
+			});
+			if (theme.bgImage && theme.bgImage !== 'none') {
+				ctx.css('background-image', 'url(' + theme.bgImage + ')');
+			} else {
+				ctx.css('background-image', 'none');
+			}
+		},
+		applyNone: function (ctx) {
+			ctx.css({
+				color: '',
+				backgroundColor: '',
+				backgroundImage:'',
+			});
+		},
+	};
+
 
 	/////////////////////////////////////////////////////////////////
 	// ダウンロード関連のDOM管理等
-	var downloadFileManager = {
+	// * これは'noja_download_*'部分のマネージメントだけを行う
+	// html import/exportの下請け
+	var gDownloadFileManager = {
+		$idPrefix: 'noja_download_',
+		$id: 'noja_download_file_main',
+		$selector: '#noja_download_file_main',
+		get $ () {
+			return $('#noja_download_file_main');
+		},
+		// アプリモードのtagを想定しているので、アプリモード前提になる
+		// これはimportもアプリモード機能だから
 		replaceAll: function (downloadFileMain) {
-			// 画面側('#noja'はapp/index.html
+			// 画面側('#noja'はapp/index.htmlの中にあるtag
 			$('#noja').empty().append(downloadFileMain);
 		},
+		// 順番に並ぶようにprev管理しながら挿入しているが、
+		// div単位でsection毎にtreeでまとまっているなら
+		// 後からsortしてもよいのでは？(重複チェックが面倒か？)
+		// notifyはdb側のレコード更新のためのhook
 		margeSections: function (new_section, notifyFn) {
 			if (notifyFn === undefined) {
 				notifyFn = null;
 			}
+			var idPrefix = this.$idPrefix;
 			var prev = null;
 			for (var sec_no = 1; sec_no < new_sections.length; ++sec_no) {
-				var sec_id = 'noja_download_section_' + sec_no;
+				var sec_id = idPrefix + 'section_' + sec_no;
 				var existInDest = gSectionManager.isExist(sec_no);
 				if (sec_no in new_sections) {
 					var sec = new_sections[sec_no];
-					var itemDiv = gSectionManager.toDiv (sec_no, sec, 'noja_download_');
+					var itemDiv = $(gSectionManager.toDivHtml (
+						sec_no, sec, idPrefix));
 					if (existInDest) {
 						prev = $('#' + sec_id).replaceWith(itemDiv);
 					} else {
@@ -2000,7 +2126,7 @@ $(document).ready(function(){
 							oldItem.remove();
 						}
 						if (prev === null) {
-							$('#noja_download_file_main')
+							$(this.$selector)
 								.prepend(itemDiv);
 						} else {
 							prev = prev.after(itemDiv);
@@ -2016,44 +2142,14 @@ $(document).ready(function(){
 				}
 			}
 		},
-		setColorTheme: function (colorInfo) {
-			var ctx = $('#noja_download_file_main');
-			ctx.css({
-				color: colorInfo.color,
-				backgroundColor: colorInfo.bgColor,	// これはDOMな名前っぽい？
-			});
-			if (colorInfo.bgImage) {
-				ctx.css('background-image', 'url(' + colorInfo.bgImage + ')');
-			}
-		},
-		resetColorTheme: function () {
-			var ctx = $('#noja_download_file_main');
-			ctx.css({
-				color: '',
-				backgroundColor: '',
-				backgroundImage:''
-			});
-		},
-		// このあたりは通常のコンテンツ読み込み時の処理と共通化できる
-		parseColorTheme: function (info, infoRoot) {
-			info.color = infoRoot.css('color');
-			info.bgColor = infoRoot.css('background-color');
-			info.bgImage = infoRoot.css('background-image');
-			if (info.bgImage === null
-				|| info.bgImage === 'none'
-				|| info.bgImage === '') {
-				info.bgImage = null;
-			} else {
-				var url = info.bgImage.match(/url\(([^\)]*)\)/)[1];
-				info.bgImage = $('<img>')
-					.attr('src', url)
-					.bind('load', function() {showPage();})
-					.get(0);
-				info.bgColor = '#FFFFFF';
-			}
-			return info;
-		},
-
+		// この２つはtarget ctxが管理課のfile_mainになるのでgThemeManagerとは独立
+		// 引数のbindしていない後続部分はgThemeManagerと同一にしておくこと
+		// jQuery objectがうまく取れないようならprops側をgetter化して対応するので
+		// こちらは変えない。
+		setColorTheme: gThemeManager.applyColorTheme
+			.bind(gThemeManager, this.$),
+		resetColorTheme: gThemeManager.applyNone
+			.bind(gThemeManager, this.$),
 		// dataRoot直下のdivから各download_sectionを取り出す
 		// 取り込みだけでsplitするのは凶悪なので呼出し側に任せる
 		// fnはsection毎のprogress
@@ -2061,7 +2157,15 @@ $(document).ready(function(){
 		// destに貯めるようになっているが、progress経由で呼出し側が
 		// stockするように変更する？
 		// deferred化してpipeline処理できるようにする
-		toDataAll: function (dest_sections, dataRoot, prefix, fn) {
+		// prefix省略は内蔵デフォルト値を意味する
+		// prefixなしを指定する場合は明示的に''を指定する
+		toDataAll: function (dest_sections, dataRoot, fn, prefix) {
+			if (prefix === undefined) {
+				prefix = this.$idPrefix;
+			}
+			if (fn === undefined) {
+				fn = null;
+			}
 			var cs = function (clsName) {
 				return '.' + prefix + clsName;
 			};
@@ -2072,8 +2176,6 @@ $(document).ready(function(){
 				}
 				return null;
 			};
-			prefix = (prefix === undefined) ? '' : prefix;
-			fn = (fn === undefined) ? null : fn;
 			var min_max_sec_no = new MinMaxRecorder();
 			dataRoot.children('div').each(function () {
 				console.debug('this', this, $(this));
@@ -2097,6 +2199,33 @@ $(document).ready(function(){
 				return true;
 			});
 			return min_max_sec_no;
+		},
+		// download_file領域への貼り付けで使う
+		// @@ TODO @@ Idタイプのサイトの場合に検索に困る
+		insertSection: function (secId, secData) {
+			var idPrefix = this.$idPrefix;
+			var reId = RegExp(idPrefix + 'section_(.*)');
+			var root = $('#' + idPrefix + 'file_main');
+			// idの数値部分で探す
+			var prev = (function (elems, secId) {
+				var prev = null;
+				for (var i = 0; i < elems.size(); ++i) {
+					var t = elems.eq(i);
+					var n = t.attr('id').match(reId)[1];
+					if (n >= secId) {
+						break;
+					} else {
+						prev = t;
+					}
+				}
+				return prev;
+			})(root.children('div'), secId);
+			var divHtml = gSectionmanager.toDivHtml (secId, secData, idPrefix);
+			if (prev === null) {
+				root.prepend(divHtml);
+			} else {
+				prev.after(divHtml);
+			}
 		},
 	};
 	/////////////////////////////////////////////////////////////////
@@ -2335,11 +2464,7 @@ $(document).ready(function(){
 		},
 	};
 
-	$.templates('twitterTextTmpl'
-		, '{{:url}}\n'
-		+ '「{{:title}}」読んだ！\n'
-		+ '#{{:hash1}} #{{:hash2}}'
-		);
+	$.templates('twitterTextTmpl','#TwitterText');
 	var Twitter = {
 		tweetURL: 'http://twitter.com/intent/tweet',
 		createURL: function (params) {
@@ -2368,85 +2493,11 @@ $(document).ready(function(){
 				$(input_id).prop('checked', true);
 			};
 			// ここのthisはeachの見つかったanchorを指す
-			$(this).bind('click', handler).bind('press', handler);
+			$(this).on('click', handler)
+				.on('press', handler);
 		});
 	};
 
-
-	////////////////////////////////////////////////////////
-
-	// colorTheme関連はどこから取るかはsite毎だが、
-	// 値を管理するのは別にサイト側objectでする必要はない
-	// 内部形式同士の場合はbgColor,bgImageで
-	// cssの場合はbackground-color等
-	// backgroundColorはDOM？
-	var gThemeManager = {
-		color: {
-			color: '#000',
-			bgColor: '#ffffff',
-			bgImage: null,
-			onLoad: undefined,
-		},
-		setColorTheme: function (props) {
-			$.extend(this.color, props);
-			if (this.color.bgImage !== null
-				&& this.color.bgImage !== 'none'
-				&& this.color.bgImage !== '') {
-				this.setBackgroundByUrl(this.color.bgImage, this.color.onLoad);
-			}
-			return this;
-		},
-		setBackgroundByUrl: function (url, onLoadHandler) {
-			this.color.bgImage = $('<img>').get(0).attr('src', url);
-			if (onLoadHander !== undefined) {
-				this.color.bgImage.bind('load', onLoadHandler);
-			}
-			return this;
-		},
-		setBackground: function (ctx, onLoadHandler) {
-			this.color.bgImage = ctx.css('background-image');
-			this.color.bgColor = ctx.css('background-color');
-			if (this.color.bgImage === 'none' || this.color.bgImage === '') {
-				this.color.bgImage = null;
-			} else {
-				var url = this.bgImage.match(/^url\((.*)\)$/)[1];
-				this.setBackgroundByUrl (url, onLoadHandler);
-				this.color.bgColor = '#ffffff';
-			}
-			return this;
-		},
-		toTextColorTheme: function () {
-			var s = 'color: ' + this.color.color + ';'
-				+ 'background-color: ' + this.color.bgColor + ';'
-				;
-			if (this.color.bgImage) {
-				s += 'background-image: url(' + this.color.bgImage.src + ');';
-			}
-			return s;
-		},
-		toCssColorTheme: function (dest) {
-			if (dest === undefined) {
-				dest = {};
-			}
-			dest.color = this.color.color;
-			dest.backgroundColor = this.color.bgColor;
-			dest.backgroundImage = (this.color.bgImage === null) ? null
-					: 'url(' + this.color.bgImage.src + ')';
-			return dest;
-		},
-		// onloadはいいのかな？
-		applyColorTheme: function (ctx) {
-			ctx.css({
-				color: this.color.color,
-				backgroundColor: this.color.bgColor
-			});
-			if (this.color.bgImage && this.color.bgImage !== 'none') {
-				ctx.css('background-image', 'url(' + this.color.bgImage + ')');
-			} else {
-				ctx.css('background-image', 'none');
-			}
-		},
-	};
 
 
 
@@ -2552,8 +2603,6 @@ $(document).ready(function(){
 
 		// NovelIdによるカスタム設定を初期設定に読み込むか？
 		this.isInitializeByCustomSetting = false;
-		// autoPagerが貼り付ける先をdownloadfile領域にするか
-		this.autoPageToDownloadFile = true;
 		//
 		this.enableReputationForm = false;
 		//
@@ -2810,60 +2859,45 @@ $(document).ready(function(){
 	// 多分抜き出しても大丈夫だと思うが変数束縛はチェックしていない
 	// 初期化段階でのメニューカスタマイズ
 	AppModeSite.prototype.uiCustomSetup = function () {
-		this.$setupLinkMenu ($('noja_link'));
+		this.$setupLinkMenu ($('#noja_link'));
 		this.$buildReputationForm ();
-		$('#noja_link')
-			.empty()
-			.append(
-				$('<div style="text-align:right; border-bottom-width:1px; border-bottom-style:solid;">'
-				+ '<a id="noja_closelink">[閉じる]</a>'
-				+ '</div>'
-				).bind('click', function() { $('#noja_link').hide(); })
-			);
-
-
-		// @@ TODO @@
+		$('#noja_link').empty();
+		$('#noja_link').append($('#AppModeSite_linkmenu').render({}));
 		$('#noja_import_container')
-			.html('<h4>読み込み</h4>'
-			+ '<div id="noja_file_back">'
-			//+ '<input id="noja_file" type="file" value="" accept="text/html, application/zip" multiple="true" >'
-			+ '<input id="noja_file" type="file" multiple="true" >'
-			+ '</div>'
-			+ '<br /><br />'
-			+ '<a id="noja_yomikomi">保存・読み込み機能について</a>'
-			);
-		console.debug('set onchange');
-		$('#noja_file').on('change', app_fileLoadHandler);
-
-
-
+			.html($('#AppModeSite_import_menuitem').render({
+				url: APP_YOMIKOMI_SETUMEI,
+			}));
 		$('#noja_saveload_container')
-			.append('<br /><a id="noja_booklist">保存した小説リスト</a>');
+			.append($('#AppModeSite_saveload_booklist_menuitem').render({}));
 		$('#noja_version')
-			.append('<br /><br /><a id="noja_kokuhaku">関係のない話</a>');
-		$('#noja_booklist').bind('click', function() {
-			buildAndShowBookList();
-		});
+			.append($('#AppModeSite_version_extra_menuitem').render({
+				url: APP_KOKUHAKU,
+			}));
 
 
+		$('#noja_closelink').on('click', function() { $('#noja_link').hide(); });
+		$('#noja_file').on('change', app_fileLoadHandler);
+		$('#noja_booklist').on('click', buildAndShowBookList);
+
+		// アプリモードでの内蔵htmlリソース読み込みの場合は整形式なので
+		// そのまま直接gHtmlPortManager.nojaImportを呼ぶ
 		// 読み込み関連はattrでファイル名を指定する共通ハンドラ化したほうがいい？
-		var app_builtin_content_load_handler = function (res) {
-			nojaImport(ResourceManager.load (res)).then(
+		var app_builtin_content_load_handler = function () {
+			gHtmlPortManager.nojaImport(ResourceManager.load (
+				$(this).attr('noja_import_file_url'))
+			).then(
 				jumpToTop
 				// format mismatchでエラーが出ることはあるが無視
 			);
 		};
-		$('#noja_yomikomi').bind('click', function(){
-			app_builtin_content_load_handler (APP_YOMIKOMI_SETUMEI);
-		});
-		$('#noja_kokuhaku').bind('click', function(){
-			app_builtin_content_load_handler (APP_KOKUHAKU);
+		$.each(['#noja_yomikomi', '#noja_kokuhaku'], function(index, selecttor) {
+			$(selector).on('click', app_builtin_content_load_handler);
 		});
 	};
 
 	// Deferred interface
 	AppModeSite.prototype.importInitialContents = function () {
-		return nojaImport (ResourceManager.load (APP_SETUMEI));
+		return gHtmlPortManager.nojaImport (ResourceManager.load (APP_SETUMEI));
 	};
 
 
@@ -2871,8 +2905,12 @@ $(document).ready(function(){
 		return url;
 	};
 
-
-
+	// download_file領域への貼り付け
+	// アプリモードで取り込む場合は画面内の置場に貯めておかないと
+	// のじゃーcloseしたときに困るので常時enable
+	AppModeSite.prototype.autoPagerize = function (secId, secData) {
+		gDownloadFileManager.insertSection (secId, secData);
+	};
 
 
 	//////////////////////////////////////////////////////////////////
@@ -2934,8 +2972,6 @@ $(document).ready(function(){
 
 		// NovelIdによるカスタム設定を初期設定に読み込むか？
 		this.isInitializeByCustomSetting = true;
-		// autoPagerが貼り付ける先をdownloadfile領域にするか
-		this.autoPageToDownloadFile = false;
 		//
 		this.enableReputationForm = true;	// @@ ここをfalseにする @@
 		//
@@ -3213,9 +3249,7 @@ $(document).ready(function(){
 
 	// これはbodyで拾うので実は次話移動等の部分では使えないが…
 	NarouSite.prototype.$updateThemeAtSection = function (contents) {
-		gThemeManager.setBackground($('body')
-			, function() { showPage(); }
-		);
+		gThemeManager.setBackground($('body'));
 	};
 
 
@@ -3504,6 +3538,8 @@ $(document).ready(function(){
 		//   dl.novel_sublist2 : onclickでlocation.href変更jump
 		//    dd.subtitle > a  : hrefにlink
 		//    dt.long_update   : 更新日時
+		// 章題～章題が章内(div.chapter_title内に入っていない
+		// 
 		// apiが値を返さないこともあるのでmaxは計算しないといけない
 		var totalSections = 0;
 		var maxSectionNo = 0;
@@ -3611,17 +3647,15 @@ $(document).ready(function(){
 
 		// '#noja_shiori'部分は読み込み時に更新する
 		if (this.login) {
+			// linkのidは'noja_shiori'
 			linkmenu.append(
-				'<div>'
-				+ '<img src="'  + this.$getBookmarkImageURL() + '" alt="しおり">'
-				+ '<a id="noja_shiori" target="_blank">しおりを挿む</a>'
-				+ '</div>'
+				$('#NarouSite_bookmark').render({src: this.$getBookmarkImageURL()})
 			);
 			this.$setShioriLink(gCurrentManager.id);
 			// 登録済のときは単なるtextで未登録のときはa付のリンクになっている
 			// @@ TODO @@ お気に入り解除のBoomarklet機能をimportするか？
 			linkmenu.append(
-				'<div>'+$('#head_nav > li:contains("登録")').html()+'</div>'
+				$('<div/>').append($('#head_nav > li:contains("登録")').clone())
 			);
 		}
 		// img tagそのものを引っ張ってくるのにhtml()が使えないので
@@ -3722,12 +3756,6 @@ $(document).ready(function(){
 	// 評価formの構築
 	// 初期化最終段階:コンテンツimport後
 	NarouSite.prototype.$buildReputationForm = function() {
-		var submitPointInput = {
-			type: 'submit',
-			id: 'pointinput',
-			class: 'button',
-			value: '評価する',
-		};
 		var submitImpressionConfirm = {
 			type: 'submit',
 			id: 'impressionconfirm',
@@ -3753,12 +3781,14 @@ $(document).ready(function(){
 		// divで場所だけ確保している部分
 		// loginしていればhiddenでtokenを埋め込む
 		h.find('.novel_hyouka .agree')
-			.html(this.siteInfo.login
-				? ('<input type="hidden" value="' + this.siteInfo.token + '" name="token" />'
-					+ genTagInput(submitPointInput))
-				: ('<input type="hidden" value="" name="token" />'
-					+ '※評価するにはログインしてください。')
-			);
+			.html($('#NarouNocMoonSite_vote_point').render({
+				login: this.siteInfo.login,
+				token: this.siteInfo.token,
+				type:  'submit',
+				id:    'pointinput',
+				class: 'button',
+				value: '評価する',
+			}));
 		setupFormRadiobox (h);
 
 		var build_impression_review_submit = function (forms, that) {
@@ -3766,20 +3796,20 @@ $(document).ready(function(){
 				var form = $(info.selector + ' > form');
 				form.attr('action', info.confirmURL);
 				// 感想一覧・レビュー一覧のurl
-				// idついているのでダイレクトに指定可能
-				// '#noja_impression_list' , '##noja_novelreview_list'
-				form.children('div:eq(0)').children('a:eq(0)')
-					.attr('href', info.listURL);
+				form.find(info.listSelector).attr('href', info.listURL);
 				// ログインしていない場合は警告
 				// ログインしていればsubmitボタンのタグを追加
 				if (this.siteInfo.login) {
 					form.append(info.submitTag);
 				} else {
-					// '#noja_impression_usertype' , '#noja_novelreview_usertype'
-					form.children('div:eq(0)').children('div:eq(0)')
-						.before('※' + info.desc + 'を書く場合は'
-							+ '<a href="' + this.$getLoginURL() + '" style="color:#0033cc;">'
-							+ 'ログイン</a>してください。<br>');
+					// userTypeの手前
+					form.find(info.userTypeSelector)
+						.before($('#NarouNocMoonSite_login_warning')
+							.render({
+								itemTitle: info.desc,
+								loginURL: this.$getLoginURL()
+							})
+						);
 				}
 			}, that);
 		};
@@ -3787,6 +3817,8 @@ $(document).ready(function(){
 		var formsInfo = [
 			{
 				selector: '#noja_f_cr',
+				listSelector: '#noja_impression_list',
+				userTypeSelector: '#noja_impression_usertype',
 				confirmURL: this.$getImpressionConfirmURL(),
 				listURL: this.$getImpressionListURL(),
 				submitTag: genTagInput(submitImpressionConfirm),
@@ -3794,6 +3826,8 @@ $(document).ready(function(){
 			},
 			{
 				selector: '#noja_r_fc',
+				listSelector: '#noja_novelreview_list',
+				userTypeSelector: '#noja_novelreview_usertype',
 				confirmURL: this.$getNovelReviewConfirmURL(),
 				listURL: this.$getNovelReviewListURL(),
 				submitTag: genTagInput(submitIReviewInput),
@@ -3805,6 +3839,43 @@ $(document).ready(function(){
 		// Tweitterのアンカーにid,class指定はないので位置で知るしかない
 		this.$rebuild_twitter_link(h.find('.hyouka_in:eq(1) > a'));
 	};
+
+	// 個別サイトのよって付ける場所が違う
+	//  parse時にdata-nojaをマークしておき
+	//  そこに話数順にappend
+	//  逆順等で先頭へのprependになる場合はサイト毎の先頭位置タグがいる
+	// つけるもののデータ形式もサイト毎に異なる
+	// 元サイトでのタグに合わせた形式っぽい
+	// @@ TODO @@ 新デザイン対応
+	NarouSite.prototype.autoPagerize = function (secId, secData) {
+		if (!gAutoPage) {
+			return;
+		}
+		var render = $.templates('#noja_data_noja_section_template');
+		// サイト毎の元ページへの貼り付け
+		// @@ TODO @@ サイト毎にカスタムにしないといけないか？
+		var prev = (function (secId) {
+			var prev = null;
+			for (var i = 1; i < secId; ++i) {
+				var t = $('div[data-noja="' + i + '"]:last');
+				if (t.size()) {
+					prev = t;
+				}
+			}
+		})(secId);
+		var dataHtml = $(render({
+			secId: secId, 
+			style: '',	// これはなしでいいのか？本文のcss style指定
+			secData: secData,
+		}));
+		if (prev === null) {
+			// 先頭挿入するときは直前のdivを拾ってそのafter
+			$('div.novel_pn:first').after('<hr>').after(dataHtml.children());
+		} else {
+			prev.after(dataHtml.children()).after('<hr>');
+		}
+	};
+
 
 
 
@@ -3866,8 +3937,6 @@ $(document).ready(function(){
 
 		// NovelIdによるカスタム設定を初期設定に読み込むか？
 		this.isInitializeByCustomSetting = true;
-		// autoPagerが貼り付ける先をdownloadfile領域にするか
-		this.autoPageToDownloadFile = false;
 		// 最終話より後方への移動で評価フォームを出すかどうか
 		this.enableReputationForm = true;	// @@ ここをfalseにする @@
 		// 起動時openのデフォルト
@@ -4136,9 +4205,7 @@ $(document).ready(function(){
 
 	////////////////////////////////////////////////////////
 	NocMoonSite.prototype.$updateThemeAtSection = function (contents) {
-		gThemeManager.setBackground($('body')
-			, function() { showPage(); }
-		);
+		gThemeManager.setBackground($('body'));
 	};
 
 	NocMoonSite.prototype.$updateAutherAtSection = function (contents) {
@@ -4592,12 +4659,7 @@ $(document).ready(function(){
 	NocMoonSite.prototype.$rebuild_form_user_type = function () {
 		['#noja_impression_usertype', '#noja_novelreview_usertype']
 			.forEach(function (elem) {
-				$(elem).html(
-					'<select name="usertype">'
-					+ '<option value="xuser">Xアカウントで書き込み</option>'
-					+ '<option value="">通常アカウントで書き込み</option>'
-					+ '</select>'
-				);
+				$(elem).html($('#NocMoonSite_select_account_type').render({}));
 		});
 	};
 
@@ -4612,88 +4674,159 @@ $(document).ready(function(){
 	};
 
 
-	NocMoonSite.prototype.formAttrItems = [
-		{selector: '#noja_hyouka .novel_hyouka form',
-			attr: 'action', value: '$getNovelPointRegisterURL'},
-		{selector: '#noja_f_cr form',
-			attr: 'action', value: '$getImpressionConfirmURL'},
-		{selector: '#noja_r_fc form',
-			attr: 'action', value: '$getNovelReviewConfirmURL'},
-		{selector: '#noja_impression_list',
-			attr: 'href', value: '$getImpressionListURL'},
-		{selector: '#noja_novelreview_list',
-			attr: 'href', value: '$getNovelReviewListURL'},
-	];
+	NocMoonSite.$rebuild_forms_table = function () {
+		var u = attrTableEntryGenFactory('#noja_hyouka');
+		return [
+			// ポイントformの送信先
+			// formにname属性はあるがidはない
+			u.a ('.novel_hyouka form', '$getNovelPointRegisterURL'),
 
-	NocMoonSite.prototype.changeAttrItems = function (ctx) {
-		$.each(this.linkMenuItems, function (index, item) {
-			if ('fx' in item) {
-				item.fx(ctx);
-			} else {
-				$(item.selector, ctx).attr(item.name, this.call(item.value));
-			}
-			return true;
-		});
+
+			// 感想formの送信先
+			u.a ('#noja_f_cr form', '$getImpressionConfirmURL'),
+			// レビューformの送信先
+			u.a ('#noja_r_fc form', '$getNovelReviewConfirmURL'),
+			// 感想一覧
+			// これはimportのときだけでrestoreでは更新してなかった
+			u.h ('#noja_impression_list', '$getImpressionListURL'),
+			// レビュー一覧
+			// これはimportのときだけでrestoreでは更新してなかった
+			u.h ('#noja_novelreview_list', '$getNovelReviewListURL'),
+		];
 	};
-
+	// import,restore時にncode,tokenが変わるので呼び出される
+	// (login状態は変わらないと仮定するのでmenuの書き換えはない)
 	NocMoonSite.prototype.rebuildFormsOnImportRestore = function () {
 		this.$rebuild_form_user_type();
-		//
-		$('#noja_hyouka .novel_hyouka form')
-			.attr('action', this.$getNovelPointRegisterURL());
-		$('#noja_hyouka #noja_f_cr form')
-			.attr('action', this.$getImpressionConfirmURL());
-		// これはrestoreのときだけでimportでは更新してなかった
-		$('#noja_hyouka #noja_r_fc form')
-			.attr('action', this.$getNovelReviewConfirmURL());
-		// これはimportのときだけでrestoreでは更新してなかった
-		$('#noja_impression_list')
-			.attr('href', this.$getImpressionListURL());
-		// これはimportのときだけでrestoreでは更新してなかった
-		$('#noja_novelreview_list')
-			.attr('href', this.$getNovelReviewListURL());
+		NocMoonSite.$rebuild_forms_table.forEach (function(elem, index) {
+			if (elem.gen in this.prototype) {
+				$(elem.selector).attr(elem.attr
+					, elem.prototype[elem.gen].call(this));
+			} else {
+				console.debug('missing prototype:', elem.gen);
+			}
+		}, this);
 	};
-
 
 	// 評価formの構築
 	NocMoonSite.prototype.$buildReputationForm = function() {
+		var submitImpressionConfirm = {
+			type: 'submit',
+			id: 'impressionconfirm',
+			class: 'button',
+			value: '感想を書く',
+		};
+		var submitIReviewInput = {
+			type: 'submit',
+			id: 'reviewinput',
+			class: 'button',
+			value: 'レビュー追加',
+		};
+		var hiddenToken = {
+			type: 'hidden',
+			name: 'token',
+			value: '',
+		};
 		var h = $('#noja_hyouka');
-		h.find('.novel_hyouka form').attr('action', this.$getNovelPointRegisterURL());
+		h.find('.novel_hyouka form')
+			.attr('action', this.$getNovelPointRegisterURL());
 		h.find('.novel_hyouka .agree')
-			.html('<input type="hidden" value="'
-			+ (this.siteInfo.login
-				? (this.siteInfo.token + '" name="token" /><input type="submit" class="button" value="評価する" id="pointinput" />')
-				:  ('" name="token" />※評価するにはログインしてください。')
-			));
+			.html($('#NarouNocMoonSite_vote_point').render({
+				login: this.siteInfo.login,
+				token: this.siteInfo.token,
+				type:  'submit',
+				id:   "pointinput",
+				class: 'button',
+				value:"評価する",
+			}));
 		this.$rebuild_form_user_type();
 
 		setupFormRadiobox (h);
 
-		var impr_form = $('#noja_f_cr > form');
-		impr_form.attr('action', this.$getImpressionConfirmURL());
-		// idついているのでは？
-		impr_form.children('div:eq(0)').children('a:eq(0)')
-			.attr('href', this.$getImpressionListURL());
-		if (this.siteInfo.login) {
-			impr_form.append('<input type="submit" class="button" value="感想を書く" id="impressionconfirm">');
-		} else {
-			impr_form.children('div:eq(0)').children('div:eq(0)')
-				.before('※感想を書く場合は<a href="' + this.$getLoginURL() + '" style="color:#0033cc;">ログイン</a>してください。<br>');
-		}
 
-		var revw_form = $('#noja_r_fc > form');
-		revw_form.attr('action', this.$getNovelReviewConfirmURL());
-		revw_form.children('div:eq(0)').children('a:eq(0)')
-			.attr('href', this.$getNovelReviewListURL());
-		if (this.siteInfo.login) {
-			revw_form.append('<input type="submit" class="button" value="レビュー追加" id="reviewinput">');
-		} else {
-			revw_form.children('div:eq(0)').children('div:eq(0)')
-				.before('※レビューを書く場合は<a href="' + this.$getLoginURL() + '" style="color:#0033cc;">ログイン</a>してください。<br>');
-		}
+		var build_impression_review_submit = function (forms, that) {
+			forms.forEach (function (info) {
+				var form = $(info.selector + ' > form');
+				form.attr('action', info.confirmURL);
+				// 感想一覧・レビュー一覧のurl
+				form.find(info.listSelector).attr('href', info.listURL);
+				// ログインしていない場合は警告
+				// ログインしていればsubmitボタンのタグを追加
+				if (this.siteInfo.login) {
+					form.append(info.submitTag);
+				} else {
+					// userTypeの手前
+					form.find(info.userTypeSelector)
+						.before($('#NarouNocMoonSite_login_warning')
+							.render({
+								itemTitle: info.desc,
+								loginURL: this.$getLoginURL()
+							})
+						);
+				}
+			}, that);
+		};
 
+		var formsInfo = [
+			{
+				selector: '#noja_f_cr',
+				listSelector: '#noja_impression_list',
+				userTypeSelector: '#noja_impression_usertype',
+				confirmURL: this.$getImpressionConfirmURL(),
+				listURL: this.$getImpressionListURL(),
+				submitTag: genTagInput(submitImpressionConfirm),
+				desc: '感想',
+			},
+			{
+				selector: '#noja_r_fc',
+				listSelector: '#noja_novelreview_list',
+				userTypeSelector: '#noja_novelreview_usertype',
+				confirmURL: this.$getNovelReviewConfirmURL(),
+				listURL: this.$getNovelReviewListURL(),
+				submitTag: genTagInput(submitIReviewInput),
+				desc: 'レビュー',
+			},
+		];
+		build_impression_review_submit (formsInfo, this);
 
 		this.$rebuild_twitter_link = (h.find('.hyouka_in:eq(1) > a'));
+	};
+
+
+	// 個別サイトのよって付ける場所が違う
+	//  parse時にdata-nojaをマークしておき
+	//  そこに話数順にappend
+	//  逆順等で先頭へのprependになる場合はサイト毎の先頭位置タグがいる
+	// つけるもののデータ形式もサイト毎に異なる
+	// 元サイトでのタグに合わせた形式っぽい
+	// @@ TODO @@ 新デザイン対応
+	NocMoonSite.prototype.autoPagerize = function (secId, secData) {
+		if (!gAutoPage) {
+			return;
+		}
+		var render = $.templates('#noja_data_noja_section_template');
+		// サイト毎の元ページへの貼り付け
+		// @@ TODO @@ サイト毎にカスタムにしないといけないか？
+		var prev = (function (secId) {
+			var prev = null;
+			for (var i = 1; i < secId; ++i) {
+				var t = $('div[data-noja="' + i + '"]:last');
+				if (t.size()) {
+					prev = t;
+				}
+			}
+		})(secId);
+		var dataHtml = $($.render.dataNojaSectionTmpl({
+			secId: secId, 
+			style: '',	// これはなしでいいのか？本文のcss style指定
+			secData: secData,
+		}));
+		if (prev === null) {
+			// 先頭挿入するときは直前のdivを拾ってそのafter
+			$('div.novel_pn:first').after('<hr>').after(dataHtml.children());
+		} else {
+			prev.after(dataHtml.children()).after('<hr>');
+		}
 	};
 
 
@@ -4757,9 +4890,9 @@ $(document).ready(function(){
 
 		// NovelIdによるカスタム設定を初期設定に読み込むか？
 		this.isInitializeByCustomSetting = true;
-		// autoPagerが貼り付ける先をdownloadfile領域にするか
-		this.autoPageToDownloadFile = false;
+		//
 		this.enableReputationForm = false;
+		//
 		this.alwaysOpenDefault = false;
 
 		var m = this.parseURL (url);
@@ -5114,9 +5247,7 @@ $(document).ready(function(){
 			bgImage: null,
 		});
 		if (false) {
-			gThemeManager.setBackground($('body')
-				, function() { showPage(); }
-			);
+			gThemeManager.setBackground($('body'));
 		}
 	};
 
@@ -5212,61 +5343,6 @@ $(document).ready(function(){
 		);
 	};
 
-	// とりあえず作者部分は放置,storyも放置
-	// urlの絶対パス化(or index位置と元ページ位置の違いを補正)
-	// jumpしてほしいリンクには独自attrでジャンプ先を指定しておく
-	// (sectionNoを割り当てる)
-	AkatsukiSite.prototype.$parseIndexPage = function (htmldoc) {
-		var self = this;
-		// body直下ではないのでtreeで拾えるはず
-		var contents = $($.parseHTML(htmldoc)).find('#contents-inner2');
-		var tocInfo = {
-			totalSections: 0,
-			//series:      null,
-			title:       $('#LookNovel', contents),
-			// authorは作者<a>作者名</a>でリンクはsite topからの"/user/view/xxx"形式
-			author:      $('div.story > div.story >h3.font-bb:eq(1)', contents),
-//#contents-inner2 div.story div.story div.body-x1 p
-// body-x1の子のfirstがpでhr+br+div(desc)+br+hr+br
-// くらいまでの間が対象
-// 原作とあらすじ
-			description: $('div.story', contents),
-			index:       $('table.list', contents),
-		};
-		console.debug(tocInfo);
-
-
-		// これは付けたものによる
-		//self.author = $('.novel_writername', indexDiv)
-		//	.contents()
-		//	.not('a[href^="'+self.$getShioriPrefixURL()+'"]')
-		//	.text().slice(3);
-
-		// @@ タグ等引っ張ってきた部分にlinkがあれば
-		// @@ 目次階層とコンテンツ階層でリンク補正が必要になる
-
-		// build dict: sec_no => sec_id
-		// 
-		self.sectionMap = {};
-		var total_sec_no = 0;
-		var a = $('table.list a', contents);
-		var indexItemStyle = {
-			'cursor': 'pointer',
-		};
-		a.attr('href', null)
-			.css(indexItemStyle)
-/*
-			.each(function() {
-				var sec_no = ++total_sec_no;
-				$(this).bind('click'
-					, autoHideClickJumpHandlerFactory (indexFrame
-						, sec_no, FIRST_PAGE_NO)
-				);
-			})
-*/
-			;
-		return {totalSections: total_sec_no, toc: null};	// とりあえず現状ダミー
-	};
 
 	// indexは帯域制御外とする
 	// ただし、自分自身の多重loadだけは避ける
@@ -5322,9 +5398,11 @@ $(document).ready(function(){
 
 	// 目次項目
 	// /html/body/div/div[2]/div/div/div[2]/div/div/div[4]/table/thead
-	// html body#novel div#wrapper div#container2 div#contents2 div#contents-inner2 div.box div.box div.body-x1 div.font-bb table.list thead
+	// html body#novel div#wrapper div#container2 div#contents2
+	//     div#contents-inner2 div.box div.box div.body-x1 div.font-bb table.list thead
 	// /html/body/div/div[2]/div/div/div[2]/div/div/div[4]/table/tbody
-	// html body#novel div#wrapper div#container2 div#contents2 div#contents-inner2 div.box div.box div.body-x1 div.font-bb table.list tbody
+	// html body#novel div#wrapper div#container2 div#contents2
+	//      div#contents-inner2 div.box div.box div.body-x1 div.font-bb table.list tbody
 
 	// fetcherのnotifyを受けるので、これはthis contextでは動かない
 	// 登録時にbindでthisを決めているのでthisは本来のinstanceを指す
@@ -5520,6 +5598,20 @@ $(document).ready(function(){
 		return  url;
 	};
 
+	// 個別サイトのよって付ける場所が違う
+	//  parse時にdata-nojaをマークしておき
+	//  そこに話数順にappend
+	//  逆順等で先頭へのprependになる場合はサイト毎の先頭位置タグがいる
+	// つけるもののデータ形式もサイト毎に異なる
+	// 元サイトでのタグに合わせた形式っぽい
+	AkatsukiSite.prototype.autoPagerize = function (secId, secData) {
+		if (!gAutoPage) {
+			return;
+		}
+		// @@ TODO @@ 実装
+	};
+
+
 
 
 
@@ -5579,8 +5671,6 @@ $(document).ready(function(){
 
 		// NovelIdによるカスタム設定を初期設定に読み込むか？
 		this.isInitializeByCustomSetting = true;
-		// autoPagerが貼り付ける先をdownloadfile領域にするか
-		this.autoPageToDownloadFile = false;
 		//
 		this.enableReputationForm = false;
 		//
@@ -5909,9 +5999,7 @@ $(document).ready(function(){
 			bgImage: null,
 		});
 		if (false) {
-			gThemeManager.setBackground($('body')
-				, function() { showPage(); }
-			);
+			gThemeManager.setBackground($('body'));
 		}
 	};
 
@@ -6114,6 +6202,21 @@ $(document).ready(function(){
 		this.$buildReputationForm ();
 	};
 
+	// 個別サイトのよって付ける場所が違う
+	//  parse時にdata-nojaをマークしておき
+	//  そこに話数順にappend
+	//  逆順等で先頭へのprependになる場合はサイト毎の先頭位置タグがいる
+	// つけるもののデータ形式もサイト毎に異なる
+	// 元サイトでのタグに合わせた形式っぽい
+	HamelnSite.prototype.autoPagerize = function (secId, secData) {
+		if (!gAutoPage) {
+			return;
+		}
+		// @@ TODO @@ 実装
+	};
+
+
+
 
 	////////////////////////////////////////////////////////////
 
@@ -6167,8 +6270,6 @@ $(document).ready(function(){
 
 		// NovelIdによるカスタム設定を初期設定に読み込むか？
 		this.isInitializeByCustomSetting = true;
-		// autoPagerが貼り付ける先をdownloadfile領域にするか
-		this.autoPageToDownloadFile = false;
 		//
 		this.enableReputationForm = false;
 		//
@@ -6356,9 +6457,7 @@ $(document).ready(function(){
 			bgImage: null,
 		});
 		if (false) {
-			gThemeManager.setBackground($('body')
-				, function() { showPage(); }
-			);
+			gThemeManager.setBackground($('body'));
 		}
 	};
 
@@ -6493,6 +6592,440 @@ $(document).ready(function(){
 
 
 
+	// 個別サイトのよって付ける場所が違う
+	//  parse時にdata-nojaをマークしておき
+	//  そこに話数順にappend
+	//  逆順等で先頭へのprependになる場合はサイト毎の先頭位置タグがいる
+	// つけるもののデータ形式もサイト毎に異なる
+	// 元サイトでのタグに合わせた形式っぽい
+	PixivSite.prototype.autoPagerize = function (secId, secData) {
+		if (!gAutoPage) {
+			return;
+		}
+		// @@ TODO @@ 実装
+	};
+
+	//////////////////////////////////////////////////////////////////////////////
+
+	function ArcadiaSite(url, templates) {
+		this.cls = ArcadiaSite;
+		if (templates === undefined) {
+			templates = this.cls.templates;
+		}
+
+		this.siteInfo = {
+			siteName: this.cls.siteInfo.siteName,
+			site:     this.cls.siteInfo.site,
+			site2:    this.cls.siteInfo.site2,
+			api:      this.cls.siteInfo.api,
+			//
+			basePageURL: url,
+			//
+			ncode: null,
+			ncode2: null,
+			author: null,
+			title: null,
+			//
+			token: '',
+			login: false,
+			//
+			categoryId: '',
+		};
+
+		applyTemplate.generate (this, templates, this.siteInfo);
+		this.parseURL = this.cls.parseURL.bind(this.cls);
+
+		// 汎用で、(keys,src)を指定する
+		this.setSiteInfoGeneric = filterCopyProperties.bind(this, this.siteInfo);
+		this.setSiteInfo = filterCopyProperties.bind(this, this.siteInfo, {
+			site:0, site2:0, api:0,
+		});
+		// restore機能用
+		this.restoreSiteInfo = filterCopyProperties.bind(this, this.siteInfo, {
+			site:0, site2:0, ncode2:0,
+		});
+		// import用
+		this.restoreSiteInfoForImport = filterCopyProperties.bind(this, this.siteInfo, {
+			site:0, site2:0, ncode:0, ncode2:0, author:0, title:0,
+		});
+		// filterCopyProperties(keys, src)の全束縛
+		// あるいは
+		// filterCopyProperties({}, keys, src)の全束縛
+		// にしてしまってもよいが…
+		this.getSiteInfoForSaveData = filterCopyProperties.bind(this, {
+			site: 0, site2:0, ncode:0, ncode2:0,
+		}, this.siteInfo);
+
+
+		// NovelIdによるカスタム設定を初期設定に読み込むか？
+		this.isInitializeByCustomSetting = true;
+		//
+		this.enableReputationForm = false;
+		//
+		this.alwaysOpenDefault = false;
+
+
+		var m = this.parseURL (url);
+		if (m) {
+			this.siteInfo.ncode = m.novelId;
+			this.isSingleSection = false;
+			this.secId = m.sectionId;
+			this.siteInfo.categoryId = m.categoryId;
+		} else {
+			// 本来formatがあっていてcreateされているはずなので有りえない
+		}
+		this.maxSectionNo = this.secId;
+	}
+
+	ArcadiaSite.siteInfo = {
+		siteName: 'Arcadia',
+		site:  'http://www.mai-net.net/',
+		site2: 'http://www.mai-net.net/',
+		api:   '',
+		// listから移動するtopにはcount=1がついている場合もあるようだが詳細は謎
+		$reURL: /http:\/\/www\.mai-net\.net\/bbs\/sst\/sst\.php\?act=dump&cate=([-0-9A-Za-z_]+)&all=(\d+)&n=(\d+)/,
+	};
+	ArcadiaSite.parseURL = function (url, relative) {
+		if (relative === true) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.siteInfo.site + url;
+		}
+		var m = this.siteInfo.$reURL.exec(url);
+		if (m) {
+			return {
+				categoryId: m[1],
+				novelId: parseInt(m[2]),
+				sectionId: parseInt(m[3]),
+				//
+				m: m,
+			};
+		}
+		console.debug('parseURL failed: !m');
+		return null;
+	};
+
+	ArcadiaSite.templates = {
+		//
+		$getSiteURL:				'{{:site}}{{:path}}',
+		$getNovelBaseURL:			'{{:site}}bbs/sst/sst.php?act=dump&cate={{:categoryId}}8&all={{:ncode}}&n=0&count=1',
+		$getNovelIndexURL:			'{{:site}}bbs/sst/sst.php?act=dump&cate={{:categoryId}}8&all={{:ncode}}&n=0&count=1',
+		$getNovelSectionURL:		'{{:site}}bbs/sst/sst.php?act=dump&cate={{:categoryId}}8&all={{:ncode}}&n={{:sectionId}}',
+	};
+	// 相対pathなら絶対path化する
+	ArcadiaSite.prototype.$toAbsoluteURL = function (url) {
+		if (!url.startsWith(this.siteInfo.site)) {
+			if (url.startsWith('/')) {
+				url = url.slice(1);
+			}
+			url = this.$getSiteURL ({path: url});
+		}
+		return url;
+	};
+
+
+	// ctorではできない他Managerとの間の処理等
+	// 「のじゃー」ラベルを元ページに貼り付け
+	ArcadiaSite.prototype.initialize = function () {
+		//$('#novelnavi_right').append(getNojaLabel());
+		gCurrentManager.setSingleSection (this.isSingleSection);
+		gCurrentManager.setCurrent (this.secId);
+		gThemeManager.setColorTheme({
+			color: '#000',
+			bgColor: $('body').css('background-color'),
+			bgImage: null,
+		});
+	};
+
+	// 初期化終了直前に非同期になにか動かしたいものがあればここに書く
+	ArcadiaSite.prototype.onReadyNoja = function () {
+		//
+	};
+
+	ArcadiaSite.prototype.onOpenNoja = function () {
+		this.prepareUiOnOpenNoja ();
+		// openのタイミングで非同期に動かすならここに書く
+	};
+
+	ArcadiaSite.prototype.onCloseNoja = function () {
+		this.prepareUiOnCloseNoja ();
+	};
+
+
+	// ncode,ncode2,site,site2はいる
+	ArcadiaSite.prototype.getNovelId = function () {
+		return this.siteInfo.ncode;
+	};
+
+	ArcadiaSite.prototype.getTitle = function () {
+		return this.siteInfo.title;
+	};
+	ArcadiaSite.prototype.getAuthor = function () {
+		return this.siteInfo.author;
+	};
+
+	ArcadiaSite.prototype.setToken = function (token) {
+		this.siteInfo.token = token;
+		this.siteInfo.login = (token !== '');
+	};
+
+
+	// Deferred interface
+	ArcadiaSite.prototype.getNovelSection = function (secId) {
+		var self = this;
+		if (!gNetworkManager.acquire()) {
+			return new $.Deferred().reject().promise();
+		}
+		return $.get(this.$getNovelSectionURL ({sectionId: secId}))
+		.always(function () {
+			gNetworkManager.release();
+		}).then(function (htmldoc) {
+			return new $.Deferred()
+				.resolve(self.parseHtmlContents(htmldoc, secId)).promise();
+		});
+	};
+
+	// セクション変更毎に設定しなおすもの
+	ArcadiaSite.prototype.rebuildUiOnChangeSection = function(section_no) {
+		// linkmenu等
+	};
+
+
+
+	ArcadiaSite.prototype.getNextSection = function (secId) {
+		var newSecId = secId + 1;
+		return (newSecId <= this.maxSectionNo) ? newSecId : secId;
+	};
+	// Arcadiaの場合はsecId == 0も有効なsection
+	ArcadiaSite.prototype.getPrevSection = function (secId) {
+		var newSecId = secId - 1;
+		return (newSecId >= 0) ? newSecId : secId;
+	};
+	ArcadiaSite.prototype.isLoadableSection = function (sec) {
+		return (sec <= this.maxSectionNo);
+	};
+	ArcadiaSite.prototype.updateMaxSection = function (secId, force) {
+		this.maxSectionNo = (force === true)
+			? secId : Math.max(this.maxSectionNo, secId);
+	};
+
+	// '#table'
+	ArcadiaSite.prototype.$parseIndexPage = function (index) {
+		var self = this;
+		var tr = index.find('tr').filter(function() {
+			return ($(this).find('>td').size() == 4);
+		});
+		var info = tr.eq(0);
+		var title = info.find('>td:eq(1) a');
+		var author = info.find('>td:eq(2)');
+		var title_text = title.text();
+		var author_text = author.text().replace(/\[([^\]]+)\]/, '$1');
+		this.siteInfo.title = title_text;
+		this.siteInfo.author = author_text;
+		var totalSections = tr.size();
+		var tocInfo = {
+			totalSections: tr.size(),
+			//series:      null,	// ない場合は項目自体なしでOk
+			title:       title.clone(),
+			author:      author.clone(),
+			//description: ,
+			index:       index.clone(),
+		};
+		this.updateMaxSection (totalSections - 1);
+		return tocInfo;
+	};
+
+	// カラー指定の扱いとtoken関連は調整がいる
+	ArcadiaSite.prototype.$parseHtmlCommon = function (contents, tocInfo, section) {
+		var info = contents.find('td.bgc > table:eq(0)');
+		var author = info.find('tt:eq(0)').text().replace(/Name:\s+/,'');
+		// infoのtd[align=right]にrelative linkがある
+		// どうせなら著者とタイトルは一緒に更新する？
+		// this.updateTitleAuthorAtSection (novelInfo);
+		this.siteInfo.author = author;
+		//
+		// 'Date: YYYY/MM/DD hh:mm'
+		var datetime = contents.find('td.bgc > tt:eq(0)');
+
+		var sec = {};
+
+		sec.chapter_title = '';
+		sec.subtitle = contents.find('td.bgb > font[size=4]').text();
+
+		var pre = null;
+		var body = contents.find('td.bgc > blockquote > div');
+		var post = null;
+
+		// textNodeの先頭がsubtitleと同一ならそこをremoveしたほうがいい
+
+		sec._honbun = (body) ? body.html() : null;
+		sec._maegaki = (pre) ? pre.html() : null;
+		sec._atogaki = (post) ? post.html() : null;
+		//
+		//console.debug("_honbun", sec._honbun);
+		//console.debug("_maegaki", sec._maegaki);
+		//console.debug("_atogaki", sec._atogaki);
+		//
+		//console.debug(sec);
+		console.debug(sec);
+		return sec;
+	};
+
+	ArcadiaSite.prototype.$updateThemeAtSection = function (novelInfo) {
+		gThemeManager.setColorTheme({
+			color  : novelInfo.css('color'),
+			bgColor: '#ffffff',
+			bgImage: null,
+		});
+		if (false) {
+			gThemeManager.setBackground($('body'));
+		}
+	};
+
+	ArcadiaSite.prototype.$updateTitleAuthorAtSection = function (novelInfo) {
+		var userData = $('div.userData', novelInfo);
+		this.siteInfo.title = userData.children('h1.title').text();
+		this.siteInfo.author = userData.children('h2.name').text();
+		//console.debug("title:", this.siteInfo.title);
+	};
+
+	ArcadiaSite.prototype.parseHtmlContents = function (htmldoc, section) {
+		// '#maind'がbody直下でなければ仮divにつけなくてもよいが
+		// 保守性を考え仮divにつけておく
+		var t = $('<div/>').append($.parseHTML(htmldoc));
+		var tocInfo = t.find('#table');
+		var contents = t.find('table.brdr');
+		// minimum check
+		if (!contents.size()) {
+			console.debug('min check failed');
+			return null;
+		}
+		return this.$parseHtmlCommon (contents, tocInfo, section);
+	};
+
+	// カラー指定の扱いとtoken関連は調整がいる
+	// 'a[name="kiji"]'の直後のtable
+	// 'table.brdr'
+	ArcadiaSite.prototype.parseInitialPage = function () {
+		var dfrd = new $.Deferred ();
+		var tocInfo = $('#table');
+		var contents = $('table.brdr');
+
+		// minimum check
+		if (!contents.size()) {
+			console.debug('min check failed');
+			return dfrd.reject ().promise();
+		}
+		// ログイン関連はとりあえず無効
+		this.siteInfo.login = false;
+		this.siteInfo.token = null;
+		this.siteInfo.ncode2 = null;
+
+		//this.$updateThemeAtSection (novelInfo);
+		//this.$updateTitleAuthorAtSection (novelInfo);
+
+		gSectionManager.registData (gCurrentManager.id
+			, this.$parseHtmlCommon (contents, tocInfo, gCurrentManager.id));
+		gCurrentManager.setCurrent (gCurrentManager.id);
+
+		gIndexManager.registIndex (this.$parseIndexPage (tocInfo));
+
+		// autoPagerが貼り付ける先に独自attrを付ける
+		if (false) {
+			$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a')
+				.attr('data-noja', gCurrentManager.id);
+		}
+		return dfrd.resolve ().promise();
+	};
+
+
+
+	// 目次ページを作ったときのtag要素に依存するデータ構造
+	// saveDataで利用する
+	ArcadiaSite.prototype.selectNojaIndexData = function () {
+		var indexSelector = '#noja_index';
+		return $(
+			[
+				'div.novel_title',
+				'div.novel_writername',
+				'#novel_ex',
+				'div.index_box'
+			].map(function (selector) {
+				return indexSelector + ' ' + selector;
+			}).join(', ')
+		);
+	};
+
+	// Deferred interface
+	// 内部で持つ情報は更新しても
+	// globalな情報は呼出し元で更新させる
+	ArcadiaSite.prototype.loadIndex = function () {
+		return new $.Deferred().reject().promise();
+	};
+
+
+	// Deferred interface
+	ArcadiaSite.prototype.importInitialContents = function () {
+		// なにもないのでresolveしたDeferredのpromiseを返す
+		return new $.Deferred().resolve().promise();
+	};
+
+
+	ArcadiaSite.prototype.replaceImageURL = function (url) {
+		return  url;
+	};
+
+	// 
+
+
+	//////////
+
+	ArcadiaSite.prototype.prepareUiOnOpenNoja = function () {
+		$('body').css('overflow', 'hidden');
+	};
+	ArcadiaSite.prototype.prepareUiOnCloseNoja = function () {
+		$('body').css('overflow', 'visible');
+	};
+
+	ArcadiaSite.prototype.rebuildFormsOnImportRestore = function () {
+		//
+	};
+
+	// 評価formの構築
+	ArcadiaSite.prototype.$buildReputationForm = function() {
+		//
+	};
+
+	// 初期設定
+	ArcadiaSite.prototype.$setupLinkMenu = function (linkmenu) {
+		// linkmenu等
+	};
+
+	ArcadiaSite.prototype.uiCustomSetup = function () {
+		// 初期化段階でのメニューカスタマイズ
+		this.$setupLinkMenu ($('noja_link'));
+		this.$buildReputationForm ();
+	};
+
+
+
+
+	// 個別サイトのよって付ける場所が違う
+	//  parse時にdata-nojaをマークしておき
+	//  そこに話数順にappend
+	//  逆順等で先頭へのprependになる場合はサイト毎の先頭位置タグがいる
+	// つけるもののデータ形式もサイト毎に異なる
+	// 元サイトでのタグに合わせた形式っぽい
+	ArcadiaSite.prototype.autoPagerize = function (secId, secData) {
+		if (!gAutoPage) {
+			return;
+		}
+		// @@ TODO @@ 実装
+	};
+
+
+
 
 
 
@@ -6506,13 +7039,15 @@ $(document).ready(function(){
 					return site_parser;
 				}
 			}
+			return null;
 		})([
 			AppModeSite,
 			NarouSite,
 			NocMoonSite,
 			AkatsukiSite,
 			HamelnSite,
-			PixivSite
+			PixivSite,
+			ArcadiaSite
 		]);
 		if (site_parser !== null) {
 			console.debug('selected siteParser: ' + site_parser.siteInfo.siteName);
@@ -6554,6 +7089,8 @@ $(document).ready(function(){
 /////////////////////////////////////////////////////////////////////////
 	// 右スライダーのページナビ
 	// canvasにtagでsection idとpage noを埋め込んだ方がいいのかもしれず
+	// $('<div/>').append(document.createTextNode(page + 'ページ'));
+	// のほうがまともか？
 	$.templates('updateNaviIndexTmpl', '<div>{{:page}}ページ</div>');
 	// canvasもtemplate化したほうがいいが、html側にもっていくべき
 
@@ -6626,10 +7163,10 @@ $(document).ready(function(){
 				canvas_attr.id = this._getPageId(pageNo, '');
 				navi.append($.render.updateNaviIndexTmpl({page: (pageNo + 1)}))
 					.append(
-						$('<canvas/>')
+						$('<canvas />')
 						.attr(canvas_attr)
 						.css('border-color', gThemeManager.color.color)
-						.bind('click',  clickJumpHandlerFactory (secId, pageNo))
+						.on('click',  clickJumpHandlerFactory (secId, pageNo))
 					);
 				this.drawPage (pageNo);
 			}
@@ -6748,7 +7285,7 @@ $(document).ready(function(){
 	var createImageDOMElement = function (url, section_id, page_no) {
 		return $('<img>')
 			.attr('src', url)
-			.bind('load', imageLoadHandlerFactory (section_id, page_no))
+			.on('load', imageLoadHandlerFactory (section_id, page_no))
 			.get(0)
 		;
 	};
@@ -7059,62 +7596,6 @@ $(document).ready(function(){
 		};
 		return secData;
 	};
-	////////////////////////////////////////////////////////
-	// appmodeかどうかで付ける形式が違う
-	// 個別サイトのよって付ける場所が違う
-	//  parse時にdata-nojaをマークしておき
-	//  そこに話数順にappend
-	//  逆順等で先頭へのprependになる場合はサイト毎の先頭位置タグがいる
-	// つけるもののデータ形式もサイト毎に異なる
-	// 元サイトでのタグに合わせた形式っぽい
-	$.templates('downloadSectionTmpl', '#noja_download_section_template');
-	$.templates('dataNojaSectionTmpl', '#noja_data_noja_section_template');
-	autoPagerize = function(sec, num) {
-		if (gSiteParser.autoPageToDownloadFile) {
-			var root = $('#noja_download_file_main');
-			// idの数値部分で探す
-			var prev = (function (elems, num) {
-				var prev = null;
-				for (var i = 0; i < elems.size(); ++i) {
-					var t = elems.eq(i);
-					var n = t.attr('id').match(/noja_download_section_(.*)/)[1];
-					if (n >= num) {
-						break;
-					} else {
-						prev = t;
-					}
-				}
-				return prev;
-			})(root.children('div'), num);
-			// {section_no: no, sec: sec}にしたほうがいいのかも？
-			var divHtml = $.render.downloadSectionTmpl(
-				$.extend({section_no: num}, sec));
-			if (prev === null) {
-				root.prepend(divHtml);
-			} else {
-				prev.after(divHtml);
-			}
-		} else if (gAutoPage) {
-			var prev = (function (num) {
-				var prev = null;
-				for (var i = 1; i < num; ++i) {
-					var t = $('div[data-noja="' + i + '"]:last');
-					if (t.size()) {
-						prev = t;
-					}
-				}
-			})(num);
-			var dataHtml = $($.render.dataNojaSectionTmpl(
-				$.extend({section_no: num}, sec)));
-			if (prev === null) {
-				$('div.novel_pn:first').after('<hr>').after(dataHtml.children());
-			} else {
-				prev.after(dataHtml.children()).after('<hr>');
-			}
-		}
-	};
-
-
 
 
 	////////////////////////////////////////////////////////
@@ -7162,7 +7643,7 @@ $(document).ready(function(){
 					// 登録でstatusも更新される
 					var secData
 						= gSectionManager.registData (secNo, secData, true);
-					autoPagerize (secData, secNo);
+					gSiteParser.autoPagerize (secNo, secData);
 					gSiteParser.updateMaxSection(secNo);
 					// 新しいsecNoを登録したので自動saveするならsaveが動く
 					if (gSetting.autoSave) {
@@ -8431,6 +8912,40 @@ $(document).ready(function(){
 		gIsNojaOpen = false;
 	};
 	///////////////////////////////////////////////////////////////
+	// setting省略時:gSetting
+	// with_layout省略時: true
+	// ([setting = gSetting], [with_layout = true])
+	// settingのみ省略も可能
+	var updateSettingMenuCheckbox = function (setting, with_layout) {
+		if (setting === true || setting === false) {
+			with_layout = setting;
+			setting = gSetting;
+		} else if (setting === undefined) {
+			setting = gSetting;
+		}
+		with_layout = (with_layout === undefined) ? true : with_layout;
+		if (with_layout) {
+			// 名前がmaegaki,atogakiについてはfなし
+			$('#noja_maegaki').prop('checked', setting.fMaegaki);
+			$('#noja_atogaki').prop('checked', setting.fAtogaki);
+			$('#noja_kaigyou').prop('checked', setting.kaigyou);
+		}
+		$('#noja_autosave').prop('checked', setting.autoSave);
+		$('#noja_autorestore').prop('checked', setting.autoRestore);
+		$('#noja_olddata').prop('checked', setting.oldData);
+	};
+
+	///////////////////////////////////////////////////////////////
+	/////// siteParserはnewしなおさないと意味がない
+	var reCreateSiteParser = function (imported_infos) {
+		gSiteParser.restoreSiteInfoForImport (imported_infos);
+		// 管轄替え
+		gThemeManager.setColorTheme({
+			color:   imported_infos.color,
+			bgColor: imported_infos.bgColor,
+			bgImage: imported_infos.bgImage,
+		});
+	};
 	///////////////////////////////////////////////////////////////
 	// saveは新形式
 	// loadは旧形式対応とする
@@ -8468,211 +8983,250 @@ $(document).ready(function(){
 	//"tanpen":true
 	//}
 	//-->
-	// @@ 互換性のためtypoをそのまま残すか？(auther)
-	// isIndexPageReadyの評価部分が少しview側に依存した感じ
-	var createImportedInfoFromJSON = function (json) {
-		var infos = {};
-		infos.site   = json.site[0];
-		infos.site2  = json.site[1];
-		//
-		infos.ncode  = json.ncode[0];
-		infos.ncode2 = json.ncode[1];
-		//
-		infos.author = json.auther;
-		infos.generalAllNo = json.general_all_no;
-		infos.isIndexPageReady = json.tanpen;	// 名称変換
-		return infos;
-	};
-
-	var parseImportedHtmlNojaHeader = function (htmldoc) {
-		var pos = htmldoc.indexOf(DOWNLOAD_ID);
-		if (pos < 0) {
-			return false;
-		}
-		pos += DOWNLOAD_ID.length;
-		var json = $.parseJSON(htmldoc.substr(pos).match(/{[^}]*}/)[0]);
-		// site,ncodeはそれぞれ2要素の配列
-		// 常に短編設定値があるはず
-		// (不定長の場合はlength=nullに設定)
-		var isValidNojaHeader = true;
-		$.each({site: 2, ncode: 2, tanpen:null }, function(name, length) {
-			if (!(name in json) || (length !== null && json[name].length != length)) {
-				isValidNojaHeader = false;
-				return false;	// break each loop
-			}
-		});
-		return (isValidNojaHeader)
-			? createImportedInfoFromJSON (json) : false;
-	};
-
-
-
-
-
-
-	// setting省略時:gSetting
-	// with_layout省略時: true
-	// ([setting = gSetting], [with_layout = true])
-	// settingのみ省略も可能
-	var updateSettingMenuCheckbox = function (setting, with_layout) {
-		if (setting === true || setting === false) {
-			with_layout = setting;
-			setting = gSetting;
-		} else if (setting === undefined) {
-			setting = gSetting;
-		}
-		with_layout = (with_layout === undefined) ? true : with_layout;
-		if (with_layout) {
-			// 名前がmaegaki,atogakiについてはfなし
-			$('#noja_maegaki').prop('checked', setting.fMaegaki);
-			$('#noja_atogaki').prop('checked', setting.fAtogaki);
-			$('#noja_kaigyou').prop('checked', setting.kaigyou);
-		}
-		$('#noja_autosave').prop('checked', setting.autoSave);
-		$('#noja_autorestore').prop('checked', setting.autoRestore);
-		$('#noja_olddata').prop('checked', setting.oldData);
-	};
-
-	/////// siteParserはnewしなおさないと意味がない
-	var reCreateSiteParser = function (imported_infos) {
-		gSiteParser.restoreSiteInfoForImport (imported_infos);
-		// 管轄替え
-		gThemeManager.setColorTheme({
-			color:   imported_infos.color,
-			bgColor: imported_infos.bgColor,
-			bgImage: imported_infos.bgImage,
-		});
-	};
 
 	///////////////////////////////////////////////////////////////
 	// import/save/load(restore)関連
+
+	// importはdownload保存したhtml形式の読み込み
+	// indexはない
+	// コメント部分にヘッダ情報jsonがあり
+	// データ本体はdownload形式で作ったDOMが入っている
+	//
+	// ・importファイル選択したものを読み込み
+	// ・appModeで内蔵リソースから読み込んだもの
+	// 読み込み方法が異なるので、読み込んだhtml文字列が引数となる
+	//
+	// ・AppModeファイル読み込みのメニュー経由の場合
+	//   複数ファイル選択が可能で、その場合追記取り込みになる
+	//   初回は必要であればnovelId切り替わり処理
+	//   次回以降は同novelIdでの追記取り込み
 
 	// 例外のときの処理はこれだったが不要か？
 	// statusFrame.showMessage('(´・ω・｀)読み込みエラーが発生したよ。');
 	// dfrd.reject();
 
+	// 元々アプリモード前提だったのと複数site想定してなかったので
+	// site切り替えに工夫がいる
+	// ヘッダを読まないとサイトは決まらない
+	// 複数読み込みの場合、先に全部のヘッダチェックするとなると二度読み
+	// それを避けるとなると、
+	//  * 追記初回のnovelId切り替わり
+	//  * 追記途中での異novelId検出(error)
+	// を区別しないといけない
+
 	// restoreと共通部分多いはず
-	nojaImport = function (htmldoc) {
-		console.debug('nojaImport with:', htmldoc);
-		var dfrd = new $.Deferred();
-		//
-		// これは他がload中だからimportするなということ
-		if (uiIsNetworkBusy ('読み込みするのは後にするのじゃー。')) {
-			return;
-		}
-		var imported_infos = parseImportedHtmlNojaHeader(htmldoc);
-		if (!imported_infos) {
-			statusFrame.showMessage('(´・ω・｀)このhtmlはのじゃー用ファイルじゃないよ');
-			dfrd.reject();
-			return dfrd.promise();
-		}
-
-		var imported_sections = [];
-		var _kaigyou = gSetting.kaigyou;	// これは使ってない？
-
-
-		// comment部のheader以外のhtmlとして取り出すcontent
-		var content = $($.parseHTML(htmldoc));
-		var downloadFileMain = $('#noja_download_file_main', content);
-		// タイトルはヘッダのタイトルから取る
-		imported_infos.title = content.filter('title').text();
-		// カラーは'#noja_download_file_main'のstyle
-		downloadFileManager.parseColorTheme (imported_infos, downloadFileMain);
-
-	/// 新規かどうかでSection Managerにclear指示がいる
-
-		// imported_sectionsにデータ形式で全セクション構築
-		// こいつは非同期ではなくたんなるnotify callback
-		var min_max_sec_no = downloadFileManager.toDataAll (
-			imported_sections, downloadFileMain
-			, 'noja_download_', function (secId, secData) {
-				return true;
-		});
-
-
-		// 実際の登録開始:データ以外の周辺部の設定
-
-		imported_infos.currentSection = min_max_sec_no.min;
-
-		// このあたり少し同じようなコードがいくつかある
-		gCustomSettingManager.load (imported_infos.ncode)
-		.then(
-			function (data) {
-				// novelIdに対応する設定をloadした後の処理
-				gSetting = data;
-			},
-			function() {
-				// 設定がなかったらデフォルトで作って新規保存
-				gSetting = createNewSetting (imported_infos.ncode);
-				gCustomSettingManager.save (gSetting);
-				return new $.Deferred().resolve().promise();
+	gHtmlPortManager = {
+		// import可能な形式のdownloadFileを作るdumper部分
+		// どうせ読み込み側もJSONなので出力もJSONに任せるのが筋
+		// @@ TODO @@ template化
+		// site固有情報とgenericな情報をどう分けるか？
+		$createDownloadHeader: function () {
+			return JSON.stringify({
+				version: NOJA_VERSION,
+				site: [gSiteParser.getSite(), gSiteParser.getSite2()],
+				ncode: [gSiteParser.getNovelId(), gSiteParser.getNovelId2()],
+				general_all_no: gIndexManager.GeneralAllNo,
+				// @@ 互換性のためtypoをそのまま残すか？
+				auther: gSiteParser.getAuthor(),
+				tanpen: gCurrentManager.isSingleSection,
+			});
+		},
+		// @@ 互換性のためtypoをそのまま残すか？(auther)
+		// isIndexPageReadyの評価部分が少しview側に依存した感じ
+		$createImportedInfoFromJSON: function (json) {
+			var infos = {};
+			infos.site   = json.site[0];
+			infos.site2  = json.site[1];
+			//
+			infos.ncode  = json.ncode[0];
+			infos.ncode2 = json.ncode[1];
+			//
+			infos.author = json.auther;
+			infos.generalAllNo = json.general_all_no;
+			infos.isIndexPageReady = json.tanpen;	// 名称変換
+			return infos;
+		},
+		$parseImportedHtmlNojaHeader: function (htmldoc) {
+			var pos = htmldoc.indexOf(DOWNLOAD_ID);
+			if (pos < 0) {
+				return false;
 			}
-		)
-		.then(function() {
-			// currentの設定を更新
-			validateSetting();
-		}).then(function() {
-			if (imported_infos.ncode !== gSiteParser.getNovelId()) {
-				// importしたものが別のコンテンツなら
-				// ただし、imported_sectionsのデータ部をdbに所有権移行
-				gSectionManager.replaceDataBase (imported_sections);
-				// 張り付きページ部分の入れ替え
-				// 多分ごっそり入れ替えるのでカラーも変わる
-				downloadFileManager.replaceAll (downloadFileMain);
-				// IndexManagerが管理する情報の更新
-				gIndexManager.forceSetGeneralAllNo (imported_infos.generalAllNo);
-				// CurrentManagerが管理する情報の更新
-				gCurrentManager.id = imported_infos.currentSection;
-				gCurrentManager.page = 0;
-			} else {
-				// 同一novelIdなら部分的な更新
-				downloadFileManager.margeSections (imported_sections
-					, function (secId, secData) {
-					gSectionManager.registData (secId, secData);
-				});
-				// 入れ替えのときは設定はしなくてよくてマージだけ？
-				// 入れ替えのときは大元のタグからごっそり入れ替えているので
-				// それで切り替わる
-				downloadFileManager.setColorTheme (imported_infos);
-				// import側でmax有効でgIndexManager側でも同様に有効なら
-				// max比較してupdate
-				// とりあえず常にgIndexManager側では有効だとしてしまう
-				if (imported_infos.generalAllNo) {
-					// これはupdate max
-					gIndexManager.GeneralAllNo = imported_infos.generalAllNo;
+			pos += DOWNLOAD_ID.length;
+			var json = $.parseJSON(htmldoc.substr(pos).match(/{[^}]*}/)[0]);
+			// site,ncodeはそれぞれ2要素の配列
+			// 常に短編設定値があるはず
+			// (不定長の場合はlength=nullに設定)
+			var isValidNojaHeader = true;
+			$.each({site: 2, ncode: 2, tanpen:null }, function(name, length) {
+				if (!(name in json) || (length !== null && json[name].length != length)) {
+					isValidNojaHeader = false;
+					return false;	// break each loop
 				}
-			}
-			reCreateSiteParser (imported_infos);
+			});
+			return (isValidNojaHeader)
+				? this.$createImportedInfoFromJSON (json) : false;
+		},
 
-			// ヘッダのtanpenから変換したstatus情報で更新(disable or not readyになる)
-			// 元々はjson形式ヘッダ部分のtanpen設定 (bool)
-			if (imported_infos.isIndexPageReady) {
-				gIndexManager.setIndexPageDisabled();
-			} else {
-				gIndexManager.setIndexPageNotReady();
+		nojaImport: function (htmldoc) {
+			console.debug('gHtmlPortManager.nojaImport with:', htmldoc);
+			var dfrd = new $.Deferred();
+			//
+			// これは他がload中だからimportするなということ
+			if (uiIsNetworkBusy ('読み込みするのは後にするのじゃー。')) {
+				return;
+			}
+			var imported_infos = this.$parseImportedHtmlNojaHeader(htmldoc);
+			if (!imported_infos) {
+				statusFrame.showMessage('(´・ω・｀)このhtmlはのじゃー用ファイルじゃないよ');
+				dfrd.reject();
+				return dfrd.promise();
 			}
 
-			$('title').text(gSiteParser.getTitle());
-			// SectionManager側は登録済なのでCurrentManagerに変更指示するだけでいいはず
-			// ページ位置もリセットされるだろうが問題ないはず
-			gCurrentManager.setCurrent (gCurrentManager.id);
-			// 作品が切り替わった時は上でforceSetしている
-			// その値自体がunavailの可能性はあるのか。
-			gIndexManager.GeneralAllNo = imported_infos.generalAllNo;
-			// ui関連の設定
-			gSiteParser.rebuildFormsOnImportRestore ();
-			updateSettingMenuCheckbox();
-			// 大元のほうに色設定
-			// 画面側('#noja'はapp/index.html
-			$('#noja').css(gThemeManager.toCssColorTheme());
-			// 大元の子孫になるfile側はリセット
-			downloadFileManager.resetColorTheme ();
-			dfrd.resolve ();
-		});
-		return dfrd.promise();
+			var imported_sections = [];
+			var _kaigyou = gSetting.kaigyou;	// これは使ってない？
+
+
+			// comment部のheader以外のhtmlとして取り出すcontent
+			var content = $($.parseHTML(htmldoc));
+			var downloadFileMain = $('#noja_download_file_main', content);
+			// タイトルはヘッダのタイトルから取る
+			imported_infos.title = content.filter('title').text();
+			// カラーは'#noja_download_file_main'のstyle
+			gThemeManager.setColorTheme(imported_infos, downloadFileMain);
+		/// 新規かどうかでSection Managerにclear指示がいる
+
+			// imported_sectionsにデータ形式で全セクション構築
+			// こいつは非同期ではなくたんなるnotify callback
+			var min_max_sec_no = gDownloadFileManager.toDataAll (
+				imported_sections, downloadFileMain
+				, function (secId, secData) {
+					return true;
+			});
+
+
+			// 実際の登録開始:データ以外の周辺部の設定
+
+			imported_infos.currentSection = min_max_sec_no.min;
+
+			// このあたり少し同じようなコードがいくつかある
+			gCustomSettingManager.load (imported_infos.ncode)
+			.then(
+				function (data) {
+					// novelIdに対応する設定をloadした後の処理
+					gSetting = data;
+				},
+				function() {
+					// 設定がなかったらデフォルトで作って新規保存
+					gSetting = createNewSetting (imported_infos.ncode);
+					gCustomSettingManager.save (gSetting);
+					return new $.Deferred().resolve().promise();
+				}
+			)
+			.then(function() {
+				// currentの設定を更新
+				validateSetting();
+			}).then(function() {
+				if (imported_infos.ncode !== gSiteParser.getNovelId()) {
+					// importしたものが別のコンテンツなら
+					// ただし、imported_sectionsのデータ部をdbに所有権移行
+					gSectionManager.replaceDataBase (imported_sections);
+					// 張り付きページ部分の入れ替え
+					// 多分ごっそり入れ替えるのでカラーも変わる
+					gDownloadFileManager.replaceAll (downloadFileMain);
+					// IndexManagerが管理する情報の更新
+					gIndexManager.forceSetGeneralAllNo (imported_infos.generalAllNo);
+					// CurrentManagerが管理する情報の更新
+					gCurrentManager.id = imported_infos.currentSection;
+					gCurrentManager.page = 0;
+				} else {
+					// 同一novelIdなら部分的な更新
+					// 複数ファイルの追加取り込みのケースでは同一novelIdがありうる
+					gDownloadFileManager.margeSections (imported_sections
+						, function (secId, secData) {
+						gSectionManager.registData (secId, secData);
+					});
+					// 入れ替えのときは設定はしなくてよくてマージだけ？
+					// 入れ替えのときは大元のタグからごっそり入れ替えているので
+					// それで切り替わる
+					gDownloadFileManager.setColorTheme (imported_infos);
+					// import側でmax有効でgIndexManager側でも同様に有効なら
+					// max比較してupdate
+					// とりあえず常にgIndexManager側では有効だとしてしまう
+					if (imported_infos.generalAllNo) {
+						// これはupdate max
+						gIndexManager.GeneralAllNo = imported_infos.generalAllNo;
+					}
+				}
+				reCreateSiteParser (imported_infos);
+
+				// ヘッダのtanpenから変換したstatus情報で更新(disable or not readyになる)
+				// 元々はjson形式ヘッダ部分のtanpen設定 (bool)
+				if (imported_infos.isIndexPageReady) {
+					gIndexManager.setIndexPageDisabled();
+				} else {
+					gIndexManager.setIndexPageNotReady();
+				}
+
+				$('title').text(gSiteParser.getTitle());
+				// SectionManager側は登録済なのでCurrentManagerに変更指示するだけでいいはず
+				// ページ位置もリセットされるだろうが問題ないはず
+				gCurrentManager.setCurrent (gCurrentManager.id);
+				// 作品が切り替わった時は上でforceSetしている
+				// その値自体がunavailの可能性はあるのか。
+				gIndexManager.GeneralAllNo = imported_infos.generalAllNo;
+				// ui関連の設定
+				gSiteParser.rebuildFormsOnImportRestore ();
+				updateSettingMenuCheckbox();
+				// 大元のほうに色設定
+				// 画面側('#noja'はapp/index.html
+				$('#noja').css(gThemeManager.toCssColorTheme());
+				// 大元の子孫になるfile側はリセット
+				gDownloadFileManager.resetColorTheme ();
+				dfrd.resolve ();
+			});
+			return dfrd.promise();
+		},
+
+		// sectionがidタイプだと範囲指定が難しい
+		// もう少しbreak-downしてcontainerで渡されたものをdumpする？
+		renderDownloadData: $.templates('#noja_download_data_template'),
+		createDownloadData: function (minSec, maxSec) {
+			var idPrefix = 'noja_download_';
+			// ここの部分はjsRenderのforとincludeで賄える話なのかもしれず
+			// html取り込み時に正しく改行除去してあれば
+			// あとはifとforで済む話
+			var secDataHtml = '';
+			gSectionManager.rangedEach (minSec, maxSec, function (secId, secData) {
+				secDataHtml += gSectionManager.toDivHtml (secId, secData, idPrefix);
+			});
+			// 実際のrendering
+			var buffer = this.renderDownloadData({
+				downloadId: DOWNLOAD_ID,
+				id: idPrefix + 'file_main',
+				info: gHtmlPortManager.$createDownloadHeader(),
+				title: gSiteParser.getTitle(),	// html converter
+				style: gThemeManager.toTextColorTheme(),
+				contents: secDataHtml,
+			});
+			// 単独で閉じるタグの形式を整形式にしておく
+			return new Blob(
+				[buffer.replace(/(<br|<img[^>]*)>/g, '$1 />')]
+				, {type:'application/octet-stream'}
+			);
+		},
 	};
-	/////////////////////
 
+	////////////////////////////////////////////////////////////////
+	//
+	// save/load(restore):内部形式でのデータの保存・復元
+	// indexも保存されている
+	//  listからの選択でloadするときだけはnovelIdが異なるloadになる
+	//  saveについては常に現在作品となるはず
+	//
+	// 新形式:ヘッダ部分、データ部分に形式を表す新設propsを作る
+	// それがなければ旧形式として変換読み込み
+
+	// bookListの作品単位のデータ部分
 
 	var buildSaveDataSiteInfo = function () {
 		return $.extend(gSiteParser.getSiteInfoForSaveData(), {
@@ -8681,11 +9235,12 @@ $(document).ready(function(){
 		});
 	};
 
-
 	var save_saveData = function () {
 		var dfrd = new $.Deferred ();
+		// siteInfo等を設定(デフォ)
 		var data = buildSaveDataSiteInfo();
 		gSaveDataManager.load (gSiteParser.getNovelId()).then(
+			// ロードしたもの優先
 			function(readData) {
 				data = readData();
 			},
@@ -8713,6 +9268,9 @@ $(document).ready(function(){
 	//  auther: gSiteParser.author,
 	//  savetime: parseInt((new Date()) / 1000),
 	// }
+	// BookListのindex: map(key=ncode, value=BookListItem)
+	//
+	// index部分のI/O
 	// デフォルト指定があった時は成功扱い
 	var loadGlobalBookList = function (default_data) {
 		var dfrd = new $.Deferred ();
@@ -8731,6 +9289,7 @@ $(document).ready(function(){
 		return dfrd.promise ();
 	};
 
+	// index部分のI/O
 	// 省略でグローバルなカレント値
 	// saveのI/Fがステータスを返さないので常に成功扱い
 	var saveGlobalBookList = function (data, register_id, register_data) {
@@ -8752,6 +9311,7 @@ $(document).ready(function(){
 		return dfrd.promise ();
 	};
 
+	// index部分のI/O
 	var deleteGlobalBookList = function (data_id) {
 		var dfrd = new $.Deferred ();
 		loadGlobalBookList().then(
@@ -8774,7 +9334,10 @@ $(document).ready(function(){
 		return dfrd.promise ();
 	};
 
+	// index部分のI/O
 	// BookListのデータベースをRmWで更新
+	// というか、読めた場合はそのまま書き戻し
+	// 読めなければ新規にデフォルト値でエントリ生成してるだけ？
 	var saveUpdatedBookList = function () {
 		var dfrd = new $.Deferred ();
 		loadGlobalBookList({}).then(
@@ -8807,6 +9370,9 @@ $(document).ready(function(){
 			// どちらかfailになることは考えない？
 		);
 	};
+
+
+	///////////////////////////////////////////////////////////////////
 	/////////////////////
 	// novelIdが切り替わった場合
 	// novelIdに対応するカスタム設定を読み込む
@@ -8851,6 +9417,14 @@ $(document).ready(function(){
 	// 切り替わりならまずSiteParserの切り替えを行うべき
 	// gCurrentManagerが保持するid等も変更しないといけない
 	// (restore後にjumpしたりreloadする際にjumpToが判断するため
+	//
+	// indexの戻しはsave/load機能固有の話か？
+	//
+	// 戻すのは最初に有効なセクション(novelId切り替わった時)
+	// 切り替わりなしならnullを返すだけ
+	//
+	// 新形式:ヘッダ部分、データ部分に形式を表す新設propsを作る
+	// それがなければ旧形式として変換読み込み
 	var restoreBookData = function (novelId, restoreData) {
 		// download_file等のrestore
 		if (gSiteParser.getNovelId() != novelId) {
@@ -8859,7 +9433,7 @@ $(document).ready(function(){
 		gSectionManager.restore (restoreData.sections, function (secId, secData) {
 			// 1section登録する毎に呼ばれる
 			// thisに依存する場合まずいかも？
-			autoPagerize (secData, secId);
+			gSiteParser.autoPagerize (secId, secData);
 			return true;
 		} /* , WITHOUT_OVERWRITE */);
 		// SectionManagerへの登録が終わった後
@@ -8869,18 +9443,21 @@ $(document).ready(function(){
 		gCurrentManager.setSingleSection (restoreData.tanpen);
 		if (!gCurrentManager.isSingleSection && restoreData.index
 			&& (!gIndexManager.isIndexPageReady() || gSiteParser.getNovelId() != novelId)) {
-			// 連載, データにindexがあり、
+			// 連載, データにindexがあり、かつ
 			//    ・novelIdが切り替わった
 			// or ・現在indexがreadyではない状態
 			// なら、restoreDataのindexを取り込む
 			gIndexManager.setIndexPageReady();
+			// indexのdivの下に置くもの丸ごとが入っている
 			var indexDiv = indexFrame.$div ();
 			indexDiv.html(restoreData.index);
+			// event handlerはdumpされないのでそれは自前で戻す
 			// @@ この部分は統合する
 			// 今はなろう系のselectorに依存しているので
 			// 統一してgIndexManagerか何かがbindするように変更
+			var no = 0;
 			$('.index_box a', indexDiv).each(function() {
-				$(this).bind('click', 
+				$(this).on('click', 
 					autoHideClickJumpHandlerFactory (indexFrame
 						, ++no, FIRST_PAGE_NO)
 				);
@@ -8921,7 +9498,6 @@ $(document).ready(function(){
 				color:   restoreData.color,
 				bgColor: restoreData.bgColor,
 				bgImage: restoreData.bgImage,	// url
-				onLoad:  function () {showPage(); }, // onload handler
 			});
 			// 画面側('#noja'はapp/index.html
 			gThemeManager.applyColorTheme($('#noja'));
@@ -8938,6 +9514,8 @@ $(document).ready(function(){
 	};
 
 	// トップレベルのコマンド
+	// bookListからのload以外はカレント作品へのload
+	// 自動ロードの時だけメッセージ非表示
 	nojaRestore = function (novelId, isShowMessage) {
 		var dfrd = new $.Deferred();
 		isShowMessage = (isShowMessage === undefined) ? true : isShowMessage;
@@ -8949,12 +9527,15 @@ $(document).ready(function(){
 		loadCustomSetting (novelId)
 		.then(function (setting) {
 			applySetting (setting);
+			// データ本体の読み込み
 			return gSaveDataManager.load (novelId);
 		}).then(
 			// savedataのロードが終わった段階
 			// saveDataはjson形式でdumpされたものをundump
 			function (restoreData) {
 				var first_avail_section = restoreBookData (novelId, restoreData);
+				// novelIdが切り替わった場合は作品先頭に移動
+				// 同作品のrestoreならページ表示するだけ
 				if (first_avail_section !== null) {
 					var sec_no = (first_avail_section === gCurrentManager.id)
 						? CURRENT_SECTION_ID_WITH_REDRAW
@@ -8979,81 +9560,30 @@ $(document).ready(function(){
 		);
 		return dfrd.promise();
 	};
+
 	/////////////////////
+	// save/loadの一覧から削除を選んだ時のtop-levelの処理コマンド
 	nojaDelete = function (novelId) {
 		gSaveDataManager.delete (novelId);
 		deleteGlobalBookList (novelId);
 	};
 
 
-	/////////////////////
-	/////////////////////
-	// @@ TODO @@ template化
-	// site固有情報とgenericな情報をどう分けるか？
-	var createDownloadHeader = function () {
-		var s = '<!--\n'
-			+ DOWNLOAD_ID + '\n'
-			+ '{\n'
-			+ '"version":"' + NOJA_VERSION + '",\n'
-			+ '"site":["' + gSiteParser.getSite() + '","' + gSiteParser.getSite2() + '"],\n'
-			+ '"ncode":["' + gSiteParser.getNovelId() + '","' + gSiteParser.getNovelId2() + '"],\n'
-			+ '"general_all_no":' + gIndexManager.GeneralAllNo + ',\n'
-			;
-		// @@ 互換性のためtypoをそのまま残すか？
-		buffer += '"auther":' + gSiteParser.getAuthor() + ',\n';
-		buffer += '"tanpen":' + gCurrentManager.isSingleSection + '\n'
-			+ '}\n'
-			+ '-->\n'
-			;
-		return s;
-	};
-	var createDownloadData = function (min, max) {
-		var buffer = '<?xml version="1.0" encoding="utf-8"?>\n'
-			+ '<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml">\n'
-			;
-		buffer += createDownloadHeader();
-		buffer += '<head>\n'
-			+ '<title>'
-			+ $('<div>').text(gSiteParser.getTitle()).html()
-			+ '</title>\n'
-			+ '<meta charset="utf-8" />\n'
-			+ '</head>\n'
-			;
+	//////////////////////////////////////////////////////////////////
 
-		buffer += '<body>\n'
-			+ '<div>\n'
-			+ '<div id="noja_download_file_main"'
-			+ ' style="' + gThemeManager.toTextColorTheme() + '">\n';
-
-		gSectionManager.rangedEach (min, max, function (secId, secData) {
-			buffer += gSectionManager.toHtmlDiv (secId, secData, 'noja_download_');
-		});
-		buffer += '</div>\n'
-			+'</div>\n'
-			+'</body>\n'
-			+'</html>';
-		return new Blob(
-			[buffer.replace(/(<br|<img[^>]*)>/g, '$1 />')]
-			, {type:'application/octet-stream'}
-		);
-	};
-
-
-
-
-
-
-
-	// valueは[0.083... , 200.083..]が実測値
-	var slidePos2ZoomRatio = function (value) {
-		return Math.pow(2, (200 - value) / 100);
-	};
-
-
+	// save/loadのload機能用のui
+	//
+	// リスト画面を作る
+	// コンテナは読み込んだbookListのindexデータ
+	//   key:novelId => value:(title,auther,savetime)
 	// @@ TODO @@ 互換性のためtypoをそのまま残すか？
-	var createBookListHtml = function (bookListContainer) {
+	var createBookList = function (bookListContainer) {
+		// 時間ソート表示のために配列に詰め替え
+		// 
 		var items = [];
 		$.each(bookListContainer, function (key, value) {
+			// 新形式にするなら、value.format_typeか何かに形式名を入れて
+			// それの有無で切り替える
 			items.push({
 				id: key,
 				title: value.title,
@@ -9070,57 +9600,48 @@ $(document).ready(function(){
 			}
 			return 0;
 		});
-		var list = '';
-		$.each(items, function (index, item) {
-			list += '<div id="noja_book_container_'+item.id + '">'
-				+ '<a id="noja_book_delete_' + item.id + '"'
-				+ ' class="noja_book_delete">削除</a>'
-				+ ' <a id="noja_book_' + items.id + '"'
-				+ ' class="noja_book">'
-				+ items.title
-				+ '</a>'
-				+ '　作者：' + item.author
-				+'</div>';
-		});
-		return list;
+		return items;
 	};
 
+	// テンプレ側で
+	// id名にidをprefix+idで埋め込んでいるが、
+	// novelIdはnovelIdで独立属性としたほうが好ましいか？
+
+	// メインのsave/loadメニューdialogから呼び出される独立dialog
+	// 中身の生成(+handler登録)とshow()まで行う
+	//
 	// booklist = [booklistItem,...]
 	// 配列のindexはnovel_id
 	var buildAndShowBookList = function () {
-		var list = '';
+		var items = [];
 		gGlobalSettingManager.load ('bookList').then(
 			function (data) {
-				list = createBookListHtml (data);
+				items = createBookList (data);
 			},
 			function () {
-				list = '保存した小説はありません。';
+				list = '';
 			}
 		).then(
 			function () {
+				var bookListRestoreHandler = function() {
+					var novelId = $(this).attr('noja_novel_id');
+					nojaRestore(novelId);
+					popupMenu.close();
+				};
+				var bookListDeleteHandler = function() {
+					var novelId = $(this).attr('noja_novel_id');
+					nojaDelete(novelId);
+					$('#noja_book_container_' + novelId).remove();
+					console.log($('#noja_book_container_' + novelId));
+				};
 				var blv = $('#noja_booklist_view');
-				blv.html(
-					'<div class="noja_close_popup">'
-					+ '<a id="noja_closebv">[閉じる]</a>'
-					+ '</div>'
-					+ '<div>' + list + '</div>'
-				);
+				blv.html($('#nojaBookListView').render({contents: items}));
+				// noja_novel_id="{{attr:id}}で埋め込んである
 				// タイトル選択した場合のハンドラを登録
-				blv.find('a.noja_book').bind('click', function() {
-					var item_id = $(this).attr('id')
-						.match(/noja_book_(.*)/)[1];
-					nojaRestore(item_id);
-					popupMenu.close(); 
-				});
 				// タイトル削除のハンドラを登録
-				blv.find('a.noja_book_delete').bind('click', function() {
-					var item_id = $(this).attr('id')
-						.match(/noja_book_delete_(.*)/)[1];
-					nojaDelete(item_id);
-					$('#noja_book_container_' + item_id).remove();
-					console.log($('#noja_book_container_' + item_id));
-				});
-				$('#noja_closebv').bind('click', function() {
+				blv.find('a.noja_book').on('click', bookListRestoreHandler);
+				blv.find('a.noja_book_delete').on('click', bookListDeleteHandler);
+				$('#noja_closebv').on('click', function() {
 					blv.hide();
 				});
 				$('#noja_saveload').hide();
@@ -9129,6 +9650,11 @@ $(document).ready(function(){
 		);
 	};
 
+
+	//////////////////////////////////////////////////////////////////
+	// 内蔵リソースhtmlの読み込みは整形式なので直接importを呼ぶが
+	// ユーザー操作によるimportの場合はread fileしたものを渡す
+	//////////////////////////////////////////////////////////////////
 
 	// エラーの時は？
 	// 引数はFile object
@@ -9148,6 +9674,11 @@ $(document).ready(function(){
 		return dfrd.promise();
 	};
 
+	// メニューからのimportは複数ファイルを連続的に読める仕様
+	// ただし、ファイル読み込み自体アプリモード前提になるので
+	// それに依存した部分がある
+	//  htmlを張り付けて保存しておくtagがアプリモードのindex.html内tag想定
+	// 
 	// errorHandler->falseを返した場合は終了
 	// fileListはFileList object
 	var importFiles = function(fileList) {
@@ -9180,9 +9711,9 @@ $(document).ready(function(){
 						dfrd.reject();
 					} else {
 						readFile(fileSpec)
-						// 読めたらnojaImportを呼ぶ
+						// 読めたらgHtmlPortManager.nojaImportを呼ぶ
 						// 読めなければnofity経由でcancel問い合わせ
-						.then(nojaImport, function(err) {
+						.then(gHtmlPortManager.nojaImport, function(err) {
 							// read fail
 							console.debug('readFile error occured', err);
 							if (errorHandler('readError')) {
@@ -9209,7 +9740,11 @@ $(document).ready(function(){
 	};
 
 
-	// appのfile load関連のhandler
+	// appModeのfile load関連のhandler
+	// input-fileのtagからfilesを取り出してimportを呼び出してhtmlを取り込む
+	// 後処理としてはimport後に移動する先の決定
+	// たまたまnovelIdが不変だったなら現在ページを表示
+	// novelId自体が切り替わったらその作品全体の先頭ページへ
 	var app_fileLoadHandler = function() {
 		gNetworkManager.waitForReady(/* retry, duration */)
 		.progress(function(retry) {
@@ -9256,6 +9791,7 @@ $(document).ready(function(){
 		});
 	};
 
+	//////////////////////////////////////////////////////////////////
 
 	// novelIdをキーとして個別設定を取り出し設定
 	var uiLoadCustomSetting = function (novelId) {
@@ -9378,11 +9914,11 @@ $(document).ready(function(){
 			////////// version menu /////////
 			$('#noja_version h4').text('のじゃー縦書リーダー ver.' + NOJA_VERSION);
 			////////// open closeのメニュー //////
-			$('#noja_open').bind('click', nojaOpen);
-			$('#noja_close').bind('click', nojaClose);
+			$('#noja_open').on('click', nojaOpen);
+			$('#noja_close').on('click', nojaClose);
 
 			///////// コンテンツメイン画面のイベントハンドラ ////////////
-			$('#noja_main').bind('mousemove', function(e) {
+			$('#noja_main').on('mousemove', function(e) {
 				if (e.clientY < 10) {
 					// menu popup
 					menuFrame.show();
@@ -9406,7 +9942,7 @@ $(document).ready(function(){
 
 				}
 			})
-			.bind('click', function(e) {
+			.on('click', function(e) {
 				// popupがopenしていたら最初のはclose操作
 				if (popupMenu.isOpen ()) {
 					popupMenu.close();
@@ -9515,9 +10051,9 @@ $(document).ready(function(){
 				};
 			})();
 
-			$(window).bind('resize', onResize);
+			$(window).on('resize', onResize);
 
-			$(window).bind('keydown', function(e) {
+			$(window).on('keydown', function(e) {
 				var VK_R = 82;
 				var VK_S = 83;
 				if (gIsNojaOpen && e.ctrlKey && e.which===VK_S) {
@@ -9596,13 +10132,13 @@ $(document).ready(function(){
 			/////////////////////////////////////////////////
 			////// menu関連のcheckbox等
 
-			$('#noja_maegaki').bind('click', function() {
+			$('#noja_maegaki').on('click', function() {
 				MaegakiAtogakiModeController.changeMaegaki ($(this).prop('checked'));
 			});
-			$('#noja_atogaki').bind('click', function() {
+			$('#noja_atogaki').on('click', function() {
 				MaegakiAtogakiModeController.changeAtogaki ($(this).prop('checked'));
 			});
-			$('#noja_layout').bind('click', function() {
+			$('#noja_layout').on('click', function() {
 				setGlobalLayout ($(this).prop('checked'));
 				gSectionManager.reMake();	// nullcheckが入ってないがほぼ同じなので統合
 				// レイアウト変更の場合はページ位置は移動しなくてOk?
@@ -9614,36 +10150,36 @@ $(document).ready(function(){
 				gMainContext.font = get_canvas_font (gCharFontSize);
 				showPage();
 			};
-			$('#noja_mincho').bind('click', function() {
+			$('#noja_mincho').on('click', function() {
 				fontChangeHandler(FONTTYPE_MINCHO);
 			});
-			$('#noja_gothic').bind('click', function() {
+			$('#noja_gothic').on('click', function() {
 				fontChangeHandler(FONTTYPE_GOTHIC);
 			});
-			$('#noja_kaigyou').bind('click', function() {
+			$('#noja_kaigyou').on('click', function() {
 				setSettingKaigyou ($(this).prop('checked'));
 				gSectionManager.reMake();
 				goTo.CurrentSectionPageWithRedraw (FIRST_PAGE_NO);
 			});
 
 
-			$('#noja_always_open').bind('click', function() {
+			$('#noja_always_open').on('click', function() {
 				setGlobalAlwaysOpen ($(this).prop('checked'));
 			});
-			$('#noja_autosave').bind('click', function() {
+			$('#noja_autosave').on('click', function() {
 				setSettingAutoSave ($(this).prop('checked'));
 			});
-			$('#noja_autorestore').bind('click', function() {
+			$('#noja_autorestore').on('click', function() {
 				setSettingAutoRestore ($(this).prop('checked'));
 			});
-			$('#noja_olddata').bind('click', function() {
+			$('#noja_olddata').on('click', function() {
 				setSettingOldData ($(this).prop('checked'));
 			});
-			$('#noja_allpage').bind('click', function() {
+			$('#noja_allpage').on('click', function() {
 				setGlobalAllpage ($(this).prop('checked'));
 				showPage();
 			});
-			$('#noja_yokogaki').bind('click', function() {
+			$('#noja_yokogaki').on('click', function() {
 				setGlobalYokogaki($(this).prop('checked'));
 				updateLC(slidePos2ZoomRatio (gSlidePos), true);
 				// @@ 入れ替えてみるべきかも？ @@
@@ -9682,11 +10218,11 @@ $(document).ready(function(){
 					}
 					return value;
 				};
-				$(drag).bind('mousedown', function(e) {
+				$(drag).on('mousedown', function(e) {
 					dragging = true;
 					span = e.clientX - $(drag).offset().left - w;
 				});
-				$(document).bind('mouseup', function(){
+				$(document).on('mouseup', function(){
 					if (dragging) {
 						dragging = false;
 						// [0.083... , 200.083..]が実測値
@@ -9695,7 +10231,7 @@ $(document).ready(function(){
 						fontSizeSliderDoneHandler (slidePos);
 					}
 				});
-				$(document).bind('mousemove', function(e) {
+				$(document).on('mousemove', function(e) {
 					if (dragging) {
 						var left = e.clientX;
 						// マウス座標とスライダーの位置関係で値を決める
@@ -9710,7 +10246,7 @@ $(document).ready(function(){
 			})('#noja_drag', '#noja_dragback', 5);
 			////////////////
 			// 更新link
-			indexFrame.$updateAnchor().bind('click', loadIndex.bind(this, true));
+			indexFrame.$updateAnchor().on('click', loadIndex.bind(this, true));
 
 			/////////////////////////////////////////
 			// このあたりはメニュー項目
@@ -9744,7 +10280,7 @@ $(document).ready(function(){
 				'#noja_openconfig2': '#noja_config2',
 				'#noja_openlink':    '#noja_link',
 			}, function (click_target_selector, open_target_selector) {
-				$(click_target_selector).bind('click', function() {
+				$(click_target_selector).on('click', function() {
 					adjusting_menu_open_handler (click_target_selector
 						, open_target_selector);
 				});
@@ -9756,7 +10292,7 @@ $(document).ready(function(){
 				'#noja_openversion':  '#noja_version',
 				'#noja_openhyouka':   '#noja_hyouka',
 			}, function (click_target_selector, toggle_target_selector) {
-				$(click_target_selector).bind('click'
+				$(click_target_selector).on('click'
 					, createToggleHandler (toggle_target_selector)
 				);
 			});
@@ -9776,22 +10312,22 @@ $(document).ready(function(){
 				'#noja_closehyouka':   '#noja_hyouka',
 				'#noja_closedv':       '#noja_download_view',
 			}, function (click_target_selector, close_target_selector) {
-				$(click_target_selector).bind('click'
+				$(click_target_selector).on('click'
 					, createCloseHandler(close_target_selector)
 				);
 			});
 
-			$('#noja_save').bind('click', function() {
+			$('#noja_save').on('click', function() {
 				nojaSave();
 			});
-			$('#noja_restore').bind('click', function() {
+			$('#noja_restore').on('click', function() {
 				nojaRestore(gSiteParser.getNovelId());
 			});
 
 			// @@ TODO @@ start,endの概念が1～maxに依存している
 			var createDownloadLink = function (start, end, suffix) {
 				return $('<a>').attr({
-					url: URL.createObjectURL(createDownloadData(start, end)),
+					url: URL.createObjectURL(gHtmlPortManager.createDownloadData(start, end)),
 					download: gSiteParser.getTitle() + suffix + '.noja.html',
 				}).get(0);
 			};
@@ -9804,14 +10340,14 @@ $(document).ready(function(){
 				createDownloadLink(start, end, suffix).dispatchEvent(evt);
 			};
 
-			$('#noja_download').bind('click', function() {
+			$('#noja_download').on('click', function() {
 				handle_DownloadDispatchHandler (1, gSectionManager.length() - 1);
 			});
-			$('#noja_download2').bind('click', function() {
+			$('#noja_download2').on('click', function() {
 				handle_DownloadDispatchHandler (1, gSectionManager.length() - 1
 					, '(' + getDateTimeNow() + ')');
 			});
-			$('#noja_download3').bind('click', function() {
+			$('#noja_download3').on('click', function() {
 				$('#noja_dv_main').empty();
 				// @@ TODO @@ secIdが話数番号ではないものの検討
 				gSectionManager.each(function (secId, secData) {
@@ -9834,12 +10370,12 @@ $(document).ready(function(){
 				.append(ResourceManager.load (KANSOU_HTML));
 			// タブ設定
 			$('#noja_hyouka .hyoukanavi a:eq(0)')
-				.bind('click', function(){
+				.on('click', function(){
 					$('#noja_f_cr').show();
 					$('#noja_r_fc').hide();
 				});
 			$('#noja_hyouka .hyoukanavi a:eq(1)')
-				.bind('click', function(){
+				.on('click', function(){
 					$('#noja_f_cr').hide();
 					$('#noja_r_fc').show();
 				});
