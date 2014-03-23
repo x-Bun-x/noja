@@ -7,9 +7,23 @@ $(document).ready(function(){
 
 	// constとして扱うものは全大文字
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var NOJA_VERSION = '1.13.901.2+p10+kai-p6';
+	var NOJA_VERSION = '1.13.901.2+p10+kai-p8';
 
 
+
+	/////////////////////////////////////////////////////
+	// ChromeでサポートされていないES6関連
+	if (!String.prototype.startsWith) {
+		Object.defineProperty(String.prototype, 'startsWith', {
+			enumerable: false,
+			configurable: false,
+			writable: false,
+			value: function (searchString, position) {
+				position = position || 0;
+				return this.indexOf(searchString, position) === position;
+			}
+		});
+	}
 	/////////////////////////////////////////////////////
 	var createProxyAccessor = function (target, entry, origin, mode) {
 		if (mode === undefined) {
@@ -3728,7 +3742,7 @@ $(document).ready(function(){
 	var attrTableEntryGenFactory = function (base_selector) {
 		var $genFunc = function (base_selector, opt_attr) {
 			var $selector = function (selector) {
-				return ((selector.startsWith('#'))
+				return (selector.startsWith('#')
 					? '' : base_selector + ' ') + selector;
 			};
 			if (opt_attr === undefined) {
@@ -7402,9 +7416,11 @@ $(document).ready(function(){
 		var r = [];
 		var isPrevDeleted = true;
 
+		// 改ページは改行の副作用として発生する前提
+		// (col,lnは改行側でリセットされる)
 		var newPage = function () {
 			line = 0;
-			col = 0;
+			//col = 0;	// colはlnを管理するものなので改ページでは変わらない
 			arr.push(pageData);
 			ruby.push(rb);
 			pageData = [];
@@ -7476,6 +7492,7 @@ $(document).ready(function(){
 						var t = $('rt', tt).text();
 						pos = p;
 						r.push([col, l, t]);
+						// @@TODO @@ ページをまたぐときにうまくいかない？
 						col += l;
 					} else if (text[pos] == 'i') {
 						p = skipToTagEnd (pos);
@@ -8841,14 +8858,14 @@ $(document).ready(function(){
 		//console.debug ("gMainSize", gMainSize);
 		//console.debug ("gMainSize.width, .height", gMainSize.width, gMainSize.height);
 		//console.debug ("#noja main width, .height"
-		//, $('#noja_main').width(), $('#noja_main').height());
+		//	, $('#noja_main').width(), $('#noja_main').height());
 		gMainSize.width = $('#noja_main').width();
 		gMainSize.height = $('#noja_main').height();
 		//console.debug ("gMainSize", gMainSize);
 		//console.debug ("gMainSize.width, .height", gMainSize.width, gMainSize.height);
 
 		//console.debug ("#noja main width, .height"
-		//, $('#noja_main').width(), $('#noja_main').height());
+		//	, $('#noja_main').width(), $('#noja_main').height());
 		//console.debug ("gMainSize", gMainSize);
 		//console.debug ("gMainSize.width, .height", gMainSize.width, gMainSize.height);
 
@@ -8913,8 +8930,9 @@ $(document).ready(function(){
 		return false;
 	};
 	onResize = function () {
+		console.debug('onResize');
 		var needRemake = updateMainSize();
-		//console.debug('needRemake', needRemake);
+		console.debug('needRemake', needRemake);
 		// 1行n文字等は設定で指定してる。それに従って
 		// 実際のフォントサイズが決まる
 		// gCharsPerLineからgCharFontSizeを計算
@@ -10564,6 +10582,38 @@ $(document).ready(function(){
 		);
 	};
 
+	if (false) {
+		if (!('MozAppearance' in document.documentElement.style)) {
+			// Chrome: 結局manifestのcontent-scriptで指定したcssは
+			// document.styleSheetsには入らないので無駄
+			// content-script側でchrome.extension.getURLで取ったものを
+			// headのlinkに突っ込んだ場合は入るはずだが、その場合でも
+			// hrefはnullになるはず
+			(function () {
+				// url("images/hoge")とurl(images/hoge)の両方有り得るようだ
+				var lookfor = /(url\s*\(\s*"?)([^)]+\s*\))/;
+				function fix (rules, base) {
+					//var prefix = chrome.extension.getURL('');
+					//var prefix = 'chrome-extension://__MSG_@@extension_id__/' + path;
+					var prefix = base.replace(/[^\/]+$/, '');
+					for (var j = 0; j < rules.length; ++j) {
+						var b = rules[j].style['background-image'];
+						if (b) {
+							rules[j].style['background-image']
+								= b.replace(lookfor, '$1' + prefix + '$2');
+						}   
+					}
+				};
+				var ss = document.styleSheets;
+				for (var i = 0; i < ss.length; ++i) {
+					console.debug(ss[i].href);
+					if (ss[i].href && ss[i].href.indexOf ('jquery-ui') >= 0) {
+						fix (ss[i].rules, ss[i].href);
+					}
+				}
+			})();
+		}
+	}
 	//最後に初期化して終了。
 	initialize();
 });

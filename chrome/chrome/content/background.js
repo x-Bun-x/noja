@@ -53,10 +53,26 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 });
 
 chrome.browserAction.onClicked.addListener(function(tab){
-	if(tab.url.search(/http:\/\/n(code|ovel18)\.syosetu\.com\/(n|N)/)==0) {
+	var isActivateURL = function (url) {
+		var reURLList = [
+			/http:\/\/(ncode|novel18)\.syosetu\.com\/[nN]/,
+			/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/\d+\/novel_id~\d+/,
+			/http:\/\/novel\.syosetu\.org\/\d+\/(|index\.html|\d+\.html)/,
+			/http:\/\/www\.pixiv\.net\/novel\/show.php\?id=\d+/,
+			/http:\/\/www\.mai-net\.net\/bbs\/sst\/sst\.php\?act=dump/
+		];
+		for (var i = 0; i < reURLList.length; ++i) {
+			var re = reURLList[i];
+			if (url.search(re) == 0) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (isActivateURL(tab.url)) {
 		chrome.tabs.create({url:'chrome/content/app/index.html'});
-	}
-	else {
+	} else {
 		chrome.tabs.update(tab.id, {url:chrome.extension.getURL('chrome/content/app/index.html')});
 	}
 });

@@ -6,11 +6,26 @@
 #noja_menu{width:100%; position:fixed; top:0px; left:0px; display:none; z-index:103; background-color:#EEE; text-align:left; margin:0px; padding:0px; }
 #noja_menu > div { padding-left:2em; padding-right:2em; }
 #noja_menu > div > span { margin-right:2em; display:inline-block;}
-#noja_index{width:50%; height:100%; position:fixed; overflow-y:scroll; left:0px; top:0px; bottom:0px; background:#FFF; z-index:102; display:none; text-align:center; }
+#noja_index {
+	width:50%;
+	height:100%;
+	position:fixed;
+	overflow-y:scroll;
+	left:0px;
+	top:0px;
+	bottom:0px;
+	background:#FFF;
+	z-index:102;
+	display:none;
+	text-align:center;
+}
 #noja_index > div {padding:20px;}
 #noja_index > a {position:absolute; left:10px; top:10px;}
 #noja_index .novel_title, #noja_index .novel_writername { width:100%;}
-#noja_index table, #noja_index .novel_ex { width:100%; text-align:left; }
+#noja_index .index_box, #noja_index .novel_ex {
+	width:100%;
+	text-align:left;
+}
 #noja_pages{height:100%; position:fixed; overflow-y:scroll; right:0px; top:0px; bottom:0px; background:#888; z-index:102; width:200px; display:none; text-align:center; opacity:0.8; color:#FFF;}
 #noja_status{font-size:17px; width:100%; position:fixed; bottom:0px; left:0px; right:0px; display:none; z-index:101; background-color:#000; color:#FFF; text-align:left; opacity:0.5;height:28px; padding:2px;}
 #noja_pages > div > canvas { width:160px; height:113.13708498984760390413509793678px; margin-top:3px; margin-bottom:17px; cursor:pointer; border-width:1px; border-style:solid; }

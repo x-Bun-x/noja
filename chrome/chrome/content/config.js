@@ -15,9 +15,18 @@ var noja_option = {
 		chrome.runtime.sendMessage({type:'save', db:db, data:data, key:key});
 	},
 	load:function(db, key, callback) {
+		var dfrd = new $.Deferred();
+		if (callback !== undefined) {
+			dfrd.done(callback);
+		}
 		chrome.runtime.sendMessage({type:'load', db:db, key:key}, function(response) {
-			callback(response.value);
+			if (response.value === undefined) {
+				dfrd.reject();
+			} else {
+				dfrd.resolve(response.value);
+			}
 		});
+		return dfrd.promise();
 	},
 	deleteItem:function(db, key) {
 		chrome.runtime.sendMessage({type:'delete', db:db, key:key});
@@ -27,9 +36,18 @@ var noja_option = {
 		chrome.runtime.sendMessage({type:'token', token:token});
 	},
 	getToken:function(callback) {
+		var dfrd = new $.Deferred();
+		if (callback !== undefined) {
+			dfrd.done(callback);
+		}
 		chrome.runtime.sendMessage({type:'token'}, function(response) {
-			callback(response.value);
+			if (response.value === undefined) {
+				dfrd.reject();
+			} else {
+				dfrd.resolve(response.value);
+			}
 		});
+		return dfrd.promise();
 	},
 	localStorage:window.localStorage
 };

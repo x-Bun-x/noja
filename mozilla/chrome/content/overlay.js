@@ -71,7 +71,7 @@ var onPageLoad = function(e) {
 	// 定義を外部に出したいところだが、どうしよう？
 	var reURLList = [
 		/chrome:\/\/noja\/content\/app\/index\.html/,
-		/http:\/\/(ncode|novel18)\.syosetu\.com\/n/,
+		/http:\/\/(ncode|novel18)\.syosetu\.com\/[nN]/,
 		/http:\/\/www\.akatsuki-novels\.com\/stories\/view\/\d+\/novel_id~\d+/,
 		/http:\/\/novel\.syosetu\.org\/\d+\/(|index\.html|\d+\.html)/,
 		/http:\/\/www\.pixiv\.net\/novel\/show.php\?id=\d+/,
