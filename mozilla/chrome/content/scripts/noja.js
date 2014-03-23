@@ -804,6 +804,12 @@ $(document).ready(function(){
 					}
 				}
 			});
+			if ('index_accordion_header' in tocInfo) {
+				$('#noja_toc_index').accordion({
+					header: tocInfo.index_accordion_header,
+					heightStyle: 'content',
+				});
+			}
 			this.setIndexPageReady ();
 		},
 
@@ -2914,6 +2920,9 @@ $(document).ready(function(){
 
 
 	//////////////////////////////////////////////////////////////////
+	function NarouNocMoonSite() {
+		// place holder for common method
+	}
 	//////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////
 	function NarouSite(url, templates) {
@@ -3478,6 +3487,36 @@ $(document).ready(function(){
 		);
 	};
 
+	NarouNocMoonSite.prototype.$reformIndex = function (toc_index) {
+		var chapterTitles = toc_index.find('>.chapter_title');
+		var endIndex = chapterTitles.size();
+		if (endIndex) {
+			// 
+			chapterTitles.each(function (index) {
+				var startPos = toc_index.children().index($(this)) + 1;
+				var children;
+				if ((index + 1) == endIndex) {
+					children = toc_index.children().slice(startPos);
+				} else {
+					var next = chapterTitles.eq(index + 1);
+					var endPos = toc_index.children().index(next);
+					children = toc_index.children().slice(startPos, endPos);
+				}
+				$(this).after($('<div/>').append(children));
+				$(this).removeClass('chapter_title');
+				$(this).addClass('noja_toc_index_chapter_title');
+			});
+		}
+		// 元ページのスタイル指定を外すためにclassを消す
+		//toc_index.find('.novel_sublist2').removeClass('novel_sublist2');
+		//toc_index.find('.subtitle').removeClass('subtitle');
+		//toc_index.find('.long_update').removeClass('long_update');
+	};
+
+
+	NarouSite.prototype.$reformIndex = NarouNocMoonSite.prototype.$reformIndex;
+
+
 	// 未修正だったauthorとシリーズも対応
 	// シリーズはタイトル部と一緒にする
 	// @@ TODO @@ toc部分linkはcleanにしたがjavascript経由のjumpはcleanではない
@@ -3493,6 +3532,7 @@ $(document).ready(function(){
 			author:      indexPage.find('div.novel_writername'),
 			description: indexPage.find('#novel_ex'),	// div
 			index:       indexPage.find('div.index_box'),
+			index_accordion_header: '>div.noja_toc_index_chapter_title',
 		};
 		console.debug(tocInfo);
 
@@ -3534,13 +3574,16 @@ $(document).ready(function(){
 		// 指定を付ける要素が違う？
 		// どこに何がついているか調べなおさないといけない
 		// div.index_box
-		//   div.chapter_title
-		//   dl.novel_sublist2 : onclickでlocation.href変更jump
+		//   div.chapter_title : 章題分けていない場合は付かない
+		//   dl.novel_sublist2 : onclickでlocation.href変更jump:03/20になくなった
 		//    dd.subtitle > a  : hrefにlink
 		//    dt.long_update   : 更新日時
 		// 章題～章題が章内(div.chapter_title内に入っていない
+		this.$reformIndex(tocInfo.index);
 		// 
 		// apiが値を返さないこともあるのでmaxは計算しないといけない
+		// 2014/03/20のなろうの仕様変更でjavascriptでのjumpがなくなったようだ
+		// 結局サブタイ部分のanchorでのjumpのみに戻った(Chromeのwheel関連の都合らしい)
 		var totalSections = 0;
 		var maxSectionNo = 0;
 		// aで回さずにdl.novel_sublist2で回すべきか？
@@ -4436,6 +4479,7 @@ $(document).ready(function(){
 		);
 	};
 
+	NocMoonSite.prototype.$reformIndex = NarouNocMoonSite.prototype.$reformIndex;
 	// 形式を標準化する
 	NocMoonSite.prototype.$parseIndexPage = function (htmldoc) {
 		var self = this;
@@ -4443,11 +4487,12 @@ $(document).ready(function(){
 		var indexPage = $($.parseHTML(htmldoc)).find('#novel_color');
 		var tocInfo = {
 			totalSections: this.maxSectionNo,	// 取得失敗なら0のまま
-			series:      $('p.series_title', indexPage),
-			title:       $('p.novel_title', indexPage),
-			author:      $('div.novel_writername', indexPage),
-			description: $('#novel_ex', indexPage),	// div
-			index:       $('div.index_box', indexPage),
+			series:      indexPage.find('p.series_title'),
+			title:       indexPage.find('p.novel_title'),
+			author:      indexPage.find('div.novel_writername'),
+			description: indexPage.find('#novel_ex'),	// div
+			index:       indexPage.find('div.index_box'),
+			index_accordion_header: '>div.noja_toc_index_chapter_title',
 		};
 		console.debug(tocInfo);
 
@@ -4494,7 +4539,12 @@ $(document).ready(function(){
 		//   dl.novel_sublist2 : onclickでlocation.href変更jump
 		//    dd.subtitle > a  : hrefにlink
 		//    dt.long_update   : 更新日時
+		// 章題～章題が章内(div.chapter_title内に入っていない
+		this.$reformIndex(tocInfo.index);
+
 		// apiが値を返さないこともあるのでmaxは計算しないといけない
+		// 2014/03/20のなろうの仕様変更でjavascriptでのjumpがなくなったようだ
+		// 結局サブタイ部分のanchorでのjumpのみに戻った(Chromeのwheel関連の都合らしい)
 		var totalSections = 0;
 		var maxSectionNo = 0;
 		// aで回さずにdl.novel_sublist2で回すべきか？

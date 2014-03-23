@@ -95,6 +95,7 @@ var onPageLoad = function(e) {
 //	}
 	loadSubScript('chrome://noja/content/scripts/jquery.js', window.content);
 	loadSubScript('chrome://noja/content/scripts/jsrender.js', window.content);
+	loadSubScript('chrome://noja/content/scripts/jquery-ui-1.10.4.custom.min.js', window.content);
 	loadSubScript('chrome://noja/content/config.js', window.content);
 	window.content.noja_option.loadSubContent = function(url) {
 		return $.ajax({url:url, async:false}).responseText;
@@ -221,7 +222,8 @@ var onPageLoad = function(e) {
 	} else {
 		window.content.noja_option.localStorage = window.localStorage;
 		window.content.$('body')
-			.append('<link rel="stylesheet" href="resource://noja/styles/style.css">');
+			.append('<link type="text/css" rel="stylesheet" href="resource://noja/styles/style.css">')
+			.append('<link type="text/css" rel="stylesheet" href="resource://noja/styles/ui-lightness/jquery-ui-1.10.4.custom.min.css">');
 	}
 	window.content.console.log = function (data) {
 		console.log(data);
