@@ -7,7 +7,7 @@ $(document).ready(function(){
 
 	// constとして扱うものは全大文字
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var NOJA_VERSION = '1.13.901.2+p10+kai-p8';
+	var NOJA_VERSION = '1.13.901.2+p10+kai-p9';
 
 
 
@@ -6474,36 +6474,50 @@ $(document).ready(function(){
 
 
 	// カラー指定の扱いとtoken関連は調整がいる
-	PixivSite.prototype.$parseHtmlCommon = function (novelInfo, contents, section) {
-		var userData = $('div.userData', novelInfo);
-		// どうせなら著者とタイトルは一緒に更新する？
-		// this.updateTitleAuthorAtSection (novelInfo);
-		this.siteInfo.author = userData.children('h2.name').text();
-		//
-		//var datetime = userData.children('span.date');
-
-		// caption,tagは #tag_area等で直接指定可能
-		// '#wrapper div,caption-tag-container > #caption_long'
-		var tags = $('#tag_area', novelInfo);
-
-		//console.debug("author:", this.siteInfo.author);
-
+	PixivSite.prototype.$parseHtmlCommon = function (login, novelInfo, contents, section) {
 		var sec = {};
+		if (login) {
+			this.siteInfo.author = '';
+			this.siteInfo.title = novelInfo.find('h1.title').text();
+			var caption = novelInfo.find('p.caption');
+			sec.chapter_title = '';
+			var pre = caption;
+			var body = contents;
+			var post = null;
+			sec.subtitle = this.siteInfo.title;
+			sec._honbun = (body) ? body.html() : null;
+			sec._maegaki = (pre) ? pre.html() : null;
+			sec._atogaki = (post) ? post.html() : null;
+		} else {
+			var userData = $('div.userData', novelInfo);
+			// どうせなら著者とタイトルは一緒に更新する？
+			// this.updateTitleAuthorAtSection (novelInfo);
+			this.siteInfo.author = userData.children('h2.name').text();
+			//
+			//var datetime = userData.children('span.date');
 
-		sec.chapter_title = '';
-		sec.subtitle = this.siteInfo.title;
+			// caption,tagは #tag_area等で直接指定可能
+			// '#wrapper div,caption-tag-container > #caption_long'
+			var tags = $('#tag_area', novelInfo);
 
-		var pre = $('#caption_long', novelInfo);
-		var body = contents;
-		var post = null;
+			//console.debug("author:", this.siteInfo.author);
 
-		// contentsの事前フィルタがいるもの
-		// [pixivimage:42077349-2]
-		// [newpage]
 
-		sec._honbun = (body) ? body.html() : null;
-		sec._maegaki = (pre) ? pre.html() : null;
-		sec._atogaki = (post) ? post.html() : null;
+			sec.chapter_title = '';
+			sec.subtitle = this.siteInfo.title;
+
+			var pre = $('#caption_long', novelInfo);
+			var body = contents;
+			var post = null;
+
+			// contentsの事前フィルタがいるもの
+			// [pixivimage:42077349-2]
+			// [newpage]
+
+			sec._honbun = (body) ? body.html() : null;
+			sec._maegaki = (pre) ? pre.html() : null;
+			sec._atogaki = (post) ? post.html() : null;
+		}
 		//
 		//console.debug("_honbun", sec._honbun);
 		//console.debug("_maegaki", sec._maegaki);
@@ -6532,6 +6546,7 @@ $(document).ready(function(){
 		//console.debug("title:", this.siteInfo.title);
 	};
 
+	// @@ TODO @@ まったく未修正
 	PixivSite.prototype.parseHtmlContents = function (htmldoc, section) {
 		// '#maind'がbody直下でなければ仮divにつけなくてもよいが
 		// 保守性を考え仮divにつけておく
@@ -6542,7 +6557,7 @@ $(document).ready(function(){
 			console.debug('min check failed');
 			return null;
 		}
-		return this.$parseHtmlCommon (contents, section);
+		return this.$parseHtmlCommon (false, contents, section);
 	};
 
 	// カラー指定の扱いとtoken関連は調整がいる
@@ -6559,8 +6574,29 @@ $(document).ready(function(){
 		var contents = $($('noscript', novelInfo).text());
 		//console.debug(contents);
 
+		var login = false;
+
+		if (!novelInfo.size() || !contents.size()) {
+			// login
+			//rpc_t_id       'novel'
+			//rpc_i_id       数値
+			//rpc_u_id       数値
+			//rpc_e_id       数値
+			//rpc_qr         数値
+			//rpc_mtime      数値
+			//rpc_x_restrict 数値
+			//rpc_restrict   数値
+			var rpc_t_id = $('#rpc_t_id').text();
+			if (rpc_t_id != 'novel') {
+				console.debug('rpc_t_id failed');
+				return dfrd.reject ();
+			}
+			novelInfo = $('#wrapper section.work-info');
+			contents = $('#preview_area');
+			login = true;
+		}
 		// minimum check
-		if (!contents.size()) {
+		if (!novelInfo.size() || !contents.size()) {
 			console.debug('min check failed');
 			return dfrd.reject ();
 		}
@@ -6573,7 +6609,7 @@ $(document).ready(function(){
 		this.$updateTitleAuthorAtSection (novelInfo);
 
 		gSectionManager.registData (gCurrentManager.id
-			, this.$parseHtmlCommon (novelInfo, contents, gCurrentManager.id));
+			, this.$parseHtmlCommon (login, novelInfo, contents, gCurrentManager.id));
 		gCurrentManager.setCurrent (gCurrentManager.id);
 
 		// autoPagerが貼り付ける先に独自attrを付ける
@@ -6747,7 +6783,7 @@ $(document).ready(function(){
 		site2: 'http://www.mai-net.net/',
 		api:   '',
 		// listから移動するtopにはcount=1がついている場合もあるようだが詳細は謎
-		$reURL: /http:\/\/www\.mai-net\.net\/bbs\/sst\/sst\.php\?act=dump&cate=([-0-9A-Za-z_]+)&all=(\d+)&n=(\d+)/,
+		$reURL: /http:\/\/www\.mai-net\.net\/bbs\/sst\/sst\.php\?act=dump&cate=([-0-9A-Za-z_]+)&all=(\d+)(?:&n=(\d+))?/,
 	};
 	ArcadiaSite.parseURL = function (url, relative) {
 		if (relative === true) {
@@ -6757,11 +6793,13 @@ $(document).ready(function(){
 			url = this.siteInfo.site + url;
 		}
 		var m = this.siteInfo.$reURL.exec(url);
+		console.debug(m);
 		if (m) {
+			var secId = (m[3]) ? parseInt(m[3]) : 0;
 			return {
 				categoryId: m[1],
 				novelId: parseInt(m[2]),
-				sectionId: parseInt(m[3]),
+				sectionId: secId,
 				//
 				m: m,
 			};
@@ -8391,9 +8429,9 @@ $(document).ready(function(){
 				;
 				ctx.strokeRect(
 					xoffset + bodyFontSize * (1.4)
-					, bodyFontSize*4.3
-					, bodyFontSize*(gLinesPerCanvas*gLineRatio+0.6)	// 0.3づつ外に幅をつけるのかな？
-					, bodyFontSize*(gCharsPerLine-1+0.4)
+					, bodyFontSize * 4.3
+					, bodyFontSize * (gLinesPerCanvas * gLineRatio + 0.6)	// 0.3づつ外に幅をつけるのかな？
+					, bodyFontSize * (gCharsPerLine - 1 + 0.4)
 				);
 				if (false && !is_first_page) {
 					ctx.save();
@@ -10603,7 +10641,7 @@ $(document).ready(function(){
 								= b.replace(lookfor, '$1' + prefix + '$2');
 						}   
 					}
-				};
+				}
 				var ss = document.styleSheets;
 				for (var i = 0; i < ss.length; ++i) {
 					console.debug(ss[i].href);
