@@ -7,7 +7,7 @@ $(document).ready(function(){
 
 	// constとして扱うものは全大文字
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var NOJA_VERSION = '1.13.901.2+p10+kai-p9';
+	var NOJA_VERSION = '1.13.901.2+p10+kai-p11';
 
 
 
@@ -428,6 +428,7 @@ $(document).ready(function(){
 		},
 		loadEnsure: function (key, ensure, fx) {
 			var dfrd = new $.Deferred();
+			//console.debug('load key:', key, ensure, ensure.default_value);
 			var promise = noja_option.load (this.dbName, key, fx);
 			promise.done(function (data) {
 				// loadのpromiseをthisにして呼び出す?
@@ -1798,35 +1799,29 @@ $(document).ready(function(){
 	// globalからのload->propsにセット(ensured)->save
 	// set&saveはwithoutにする意味はないのではないか？
 	// table化すべき
+	// gGlobalSettingManager.loadEnsureAdaptor()を突っ込んでいたが意味ないはず
 	var ensureGlobalSettingAll = function () {
 		var dfrd = new $.Deferred();
 		var ensure_allpage, ensure_yokogaki, ensure_layout;
 		ensure_allpage = ensure_yokogaki = ensure_layout
-		= gGlobalSettingManager.loadEnsureAdaptor(
-			ensureFactory (function (value) {
-				return (typeof value === 'boolean') ? value : undefined;
-			}, false)
-		);
-		var ensure_alwayeOpen = gGlobalSettingManager.loadEnsureAdaptor(
-			ensureFactory (function (value) {
-				return (typeof value === 'boolean') ? value : undefined;
-			}, gSiteParser.alwaysOpenDefault)
-		);
-		var ensure_slidePos = gGlobalSettingManager.loadEnsureAdaptor(
-			ensureFactory (function (value) {
-				return (typeof value === 'number')
-					// && (value >= ZOOM_SLIDER.MIN && value <= ZOOM_SLIDER.MAX)
-					? value : undefined;
-			}, ZOOM_SLIDER.DEFAULT)
-		);
-		var ensure_fontType = gGlobalSettingManager.loadEnsureAdaptor(
-			ensureFactory (function (value) {
-				return (typeof value === 'string') ? value : undefined;
-			}, '')
-		);
+		= ensureFactory (function (value) {
+			return (typeof value === 'boolean') ? value : undefined;
+		}, false);
+		var ensure_alwayeOpen = ensureFactory (function (value) {
+			return (typeof value === 'boolean') ? value : undefined;
+		}, gSiteParser.alwaysOpenDefault);
+		var ensure_slidePos = ensureFactory (function (value) {
+			return (typeof value === 'number')
+				// && (value >= ZOOM_SLIDER.MIN && value <= ZOOM_SLIDER.MAX)
+				? value : undefined;
+		}, ZOOM_SLIDER.DEFAULT);
+		var ensure_fontType = ensureFactory (function (value) {
+			return (typeof value === 'string') ? value : undefined;
+		}, 'mincho');
 
 		// multi-loadのwhen待ちだとreject(fail)で問題がでるが、
 		// loadEnsureはreject時にもensure_fxを使ってデフォルト値でresolveする
+		console.debug('ensureGlobalSettingAll');
 		$.when(
 			gGlobalSettingManager.loadEnsure ('fontType', ensure_fontType)
 			, gGlobalSettingManager.loadEnsure ('alwaysOpen', ensure_alwayeOpen)
@@ -1836,6 +1831,7 @@ $(document).ready(function(){
 			, gGlobalSettingManager.loadEnsure ('slidePos', ensure_slidePos)
 		).then (
 			function (fontType, alwaysOpen, allpage, yokogaki, layout, slidePos) {
+				//console.debug('save to local variable');
 				setGlobalFontType (fontType, WITHOUT_SAVE);
 				setGlobalAlwaysOpen (alwaysOpen, WITHOUT_SAVE);
 				setGlobalAllpage (allpage, WITHOUT_SAVE);
@@ -1845,8 +1841,11 @@ $(document).ready(function(){
 			}
 		).then(
 			function () {
+				//console.debug('save globalsetting');
 				// 何故か横書きだけは保存してなかった
+				//console.debug('save to local variable : fontType');
 				gGlobalSettingManager.save ('fontType', gFontType);
+				//console.debug('save to local variable : alwaysOpen');
 				gGlobalSettingManager.save ('alwaysOpen', gAlwaysOpen);
 				gGlobalSettingManager.save ('allpage', gAllpage);
 				gGlobalSettingManager.save ('yokogaki', gYokogaki);
@@ -1854,6 +1853,7 @@ $(document).ready(function(){
 				gGlobalSettingManager.save ('slidePos', gSlidePos);
 			}
 		).then(function() {
+			//console.debug('save to local variable all done');
 			dfrd.resolve();
 		});
 		return dfrd.promise();
@@ -3344,9 +3344,12 @@ $(document).ready(function(){
 
 
 	// ここの判定はなんとか変更したいところ
-	// 目次ページは事前に除外されているので、
+	// 目次ページは事前にhonbun有無で除外されているので、
 	// 連載の文章ページor短編の文章ページの識別
-	// 短編:18禁移動のリンクアンカー
+	// 短編:18禁移動のリンクアンカーがある場合はそれを拾う
+	//      div.contants1 >span.attention + a:eq(0)
+	//      拾えた場合は正しく比較できる
+	//   警告がない短編はdiv.contents1自体がない
 	// 連載:タイトルページへのリンクアンカー
 	// なろうだとattentionはない？
 	NarouSite.prototype.$parseSectionType = function (contents) {
@@ -3358,11 +3361,12 @@ $(document).ready(function(){
 	// 短編と長編でタイトルを取れるdiv領域が違う等、
 	// これ以上は絞れない
 	NarouSite.prototype.$setupVolumeInfo = function (contents) {
-		this.isSingleSection = this.$parseSectionType(contents);
+		// 目次は除外されているのでurlだけで短編確定した状態が正当と保証されている
+		//this.isSingleSection = this.$parseSectionType(contents);
 
 		// 短編かどうかの判断はtitleが取れたかどうかで行う
 		// title関連の調整とtoken取得等
-		gCurrentManager.setSingleSection (this.isSingleSection);
+		//gCurrentManager.setSingleSection (this.isSingleSection);
 		// なろうの場合は短編と連載でトークンの取る位置が違う？
 		var t;
 		if (this.isSingleSection) {
@@ -3408,6 +3412,8 @@ $(document).ready(function(){
 	// のじゃーが張り付いた初期ページの解析
 	NarouSite.prototype.parseInitialPage = function () {
 		var dfrd = new $.Deferred ();
+		// 本文なしならそれは非対応ページ
+		// これで目次が除外され、isSingleSectionが正しいものとして確定する
 		if (!$('#novel_honbun').size()) {
 			return dfrd.reject ();
 		}
@@ -4347,12 +4353,12 @@ $(document).ready(function(){
 		// url判定で、(目次|短編) vs 連載で、isSingleSection自体は仮決定済
 		// min checkで目次を排除しているので、
 		// 実はisSingleSectionは調べるまでもなく最終決定済
-		var isSingleSection = this.$parseSectionType(contents);
-		if (isSingleSection != this.isSingleSection) {
-			console.debug ('isSingleSection check mismatch');
-			this.isSingleSection = isSingleSection;
-			gCurrentManager.setSingleSection (this.isSingleSection);
-		}
+		//var isSingleSection = this.$parseSectionType(contents);
+		//if (isSingleSection != this.isSingleSection) {
+		//	console.debug ('isSingleSection check mismatch');
+		//	this.isSingleSection = isSingleSection;
+		//	gCurrentManager.setSingleSection (this.isSingleSection);
+		//}
 
 		// tokenとncode2の取得等
 		var t = contents.find('#bkm a[href^="' + this.$getFavnovelmain18BaseURL() + '"]');
@@ -8416,19 +8422,21 @@ $(document).ready(function(){
 			};
 		} else {
 			draw_layout_box = function (ctx, is_first_page, page_width) {
-				// 右: hwidth + csz*1.4
+				// 右: start: hwidth + csz*1.4
+				//     end:
 				//		hwidth + csz*1.4 + csz*gLineRatio*ln + csz*0.6 - 1
 				//		hwidth + csz*2 + csz*gLineRatio*ln - 1
-				// 左: hwidth - csz*gLineRatio*ln - csz*2
+				// 左: start: hwidth - csz*gLineRatio*ln - csz*2
+				//     end:
 				//		hwidth - csz*gLineRatio*ln - csz*2 + csz*gLineRatio*ln + csz*0.6 - 1
 				//		hwidth - csz*1.4 - 1
 				// 2つ分位置が違う
 				var xoffset = (is_first_page)
-					? page_width
-					: page_width - bodyFontSize * ((gLinesPerCanvas + 2) * gLineRatio)
+					? page_width + bodyFontSize * (2)
+					: page_width - bodyFontSize * (2) - bodyFontSize * (gLinesPerCanvas * gLineRatio)
 				;
 				ctx.strokeRect(
-					xoffset + bodyFontSize * (1.4)
+					xoffset - bodyFontSize * (0.3)
 					, bodyFontSize * 4.3
 					, bodyFontSize * (gLinesPerCanvas * gLineRatio + 0.6)	// 0.3づつ外に幅をつけるのかな？
 					, bodyFontSize * (gCharsPerLine - 1 + 0.4)
@@ -10608,6 +10616,7 @@ $(document).ready(function(){
 				}
 			}
 		})(noja_option.localStorage);
+		//console.debug('parse ls done');
 
 		// local-storage -> typecheck -> save -> load -> set props -> save
 		// local-storageにあればそれを保存しているだけで
