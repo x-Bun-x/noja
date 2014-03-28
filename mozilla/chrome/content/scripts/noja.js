@@ -1,5 +1,13 @@
-/*jshint laxbreak: true, laxcomma: true, unused:false, newcap:false */
-/*global noja_option:false, $:false, console:false */
+/*jshint laxbreak: true */
+/*jshint laxcomma: true */
+/*jshint newcap:false */
+/*jshint unused:false */
+/*jshint latedef: true */
+/*jshint undef: true */
+/*jshint browser: true */
+/*jshint devel: true */
+/*global $:false */
+/*global noja_option:false */
 
 /*! のじゃー縦書リーダー ver.1.13.* (c) 2013 ◆TkfnIljons */
 $(document).ready(function(){
@@ -108,7 +116,7 @@ $(document).ready(function(){
 				if (key in src) {
 					if ($.isFunction(fx)) {
 						var result = fx({key: key, value: src[key]});
-						if (!(status in result)) {
+						if (!('status' in result)) {
 							result.status = true;
 						}
 						if (result.status === true) {
@@ -1282,8 +1290,7 @@ $(document).ready(function(){
 				}
 			});
 			if (format_invalid) {
-				console.debug('gettData: invalid entry format: '
-					+ entry + 'missing: ', secId, secEntry);
+				console.debug('gettData: invalid format: some entry ssing: ', secId, secEntry);
 				return null;
 			}
 
@@ -1458,11 +1465,11 @@ $(document).ready(function(){
 		},
 		restore: function (sourceSections, fn, with_overwrite) {
 			if (with_overwrite === undefined) {
-				with_overwrite = WITHOUT_OVERWRITE;
+				with_overwrite = this.WITHOUT_OVERWRITE;
 			}
 			if (fn === undefined) {
 				fn = null;
-			} else if (fn === WITH_OVERWRITE || fn === WITHOUT_OVERWRITE) {
+			} else if (fn === this.WITH_OVERWRITE || fn === this.WITHOUT_OVERWRITE) {
 				with_overwrite = fn;
 				fn = null;
 			}
@@ -1529,7 +1536,7 @@ $(document).ready(function(){
 
 		// saveData形式を生成:dataが与えられなければcreate,そうでない場合はreplace
 		createSaveData: function (data, srcDB, startSecNo, endSecNo) {
-			srcDB = (srcDB === undefined) ? this.sectionDB : sec_sections;
+			srcDB = (srcDB === undefined) ? this.sectionDB : srcDB;
 			startSecNo = (startSecNo === undefined) ? 1 : startSecNo;
 			endSecNo = (endSecNo === undefined) ? srcDB.length : endSecNo;
 			data = (data === undefined) ? {} : data;
@@ -2123,7 +2130,7 @@ $(document).ready(function(){
 		// div単位でsection毎にtreeでまとまっているなら
 		// 後からsortしてもよいのでは？(重複チェックが面倒か？)
 		// notifyはdb側のレコード更新のためのhook
-		margeSections: function (new_section, notifyFn) {
+		margeSections: function (new_sections, notifyFn) {
 			if (notifyFn === undefined) {
 				notifyFn = null;
 			}
@@ -2241,7 +2248,7 @@ $(document).ready(function(){
 				}
 				return prev;
 			})(root.children('div'), secId);
-			var divHtml = gSectionmanager.toDivHtml (secId, secData, idPrefix);
+			var divHtml = gSectionManager.toDivHtml (secId, secData, idPrefix);
 			if (prev === null) {
 				root.prepend(divHtml);
 			} else {
@@ -7918,7 +7925,7 @@ $(document).ready(function(){
 			invertIfYokogaki = false;
 		}
 		if (invertIfYokogaki && gYokogaki) {
-			isNext = -isNext;
+			direction = -direction;
 		}
 		switch (direction) {
 		case self.NEXT_PAGE:
@@ -8042,7 +8049,7 @@ $(document).ready(function(){
 			}
 		}
 		if (gThemeManager.color.bgImage) {
-			var bgimage = gThemeManager.color.bgImage;
+			var bgImage = gThemeManager.color.bgImage;
 			var bgSize = {
 				width:  bgImage.width  * 2 * drawZoomRatio,
 				height: bgImage.height * 2 * drawZoomRatio,
@@ -9559,7 +9566,7 @@ $(document).ready(function(){
 			// thisに依存する場合まずいかも？
 			gSiteParser.autoPagerize (secId, secData);
 			return true;
-		} /* , WITHOUT_OVERWRITE */);
+		} /* , gSectionmanager.WITHOUT_OVERWRITE */);
 		// SectionManagerへの登録が終わった後
 		//
 		// SectionManagerがdumpするsaveData形式は
@@ -9743,7 +9750,7 @@ $(document).ready(function(){
 				items = createBookList (data);
 			},
 			function () {
-				list = '';
+				return new $.Deferred().resolve();
 			}
 		).then(
 			function () {
@@ -10088,7 +10095,7 @@ $(document).ready(function(){
 					if ($('#noja_hyouka').css('display') != 'none'
 						&& isForward
 						&& gIndexManager.isLastSection (gCurrentManager.id)
-						&& gCUrrentManager.isLastPage ()
+						&& gCurrentManager.isLastPage ()
 						) {
 						return;
 					}
