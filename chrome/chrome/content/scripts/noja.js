@@ -1,5 +1,13 @@
-/*jshint laxbreak: true, laxcomma: true, unused:false, newcap:false */
-/*global noja_option:false, $:false, console:false */
+/*jshint laxbreak: true */
+/*jshint laxcomma: true */
+/*jshint newcap:false */
+/*jshint unused:false */
+/*jshint latedef: true */
+/*jshint undef: true */
+/*jshint browser: true */
+/*jshint devel: true */
+/*global $:false */
+/*global noja_option:false */
 
 /*! のじゃー縦書リーダー ver.1.13.* (c) 2013 ◆TkfnIljons */
 $(document).ready(function(){
@@ -7,7 +15,7 @@ $(document).ready(function(){
 
 	// constとして扱うものは全大文字
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var NOJA_VERSION = '1.13.901.2+p10+kai-p11';
+	var NOJA_VERSION = '1.13.901.2+p10+kai-p13';
 
 
 
@@ -108,7 +116,7 @@ $(document).ready(function(){
 				if (key in src) {
 					if ($.isFunction(fx)) {
 						var result = fx({key: key, value: src[key]});
-						if (!(status in result)) {
+						if (!('status' in result)) {
 							result.status = true;
 						}
 						if (result.status === true) {
@@ -584,8 +592,6 @@ $(document).ready(function(){
 	var alignLeft = function (x, ctx, text) {
 		return x;
 	};
-	// 判型可変化への対応
-	var gEnableFlexibleAspect = true;
 
 	//プロパティ
 	//
@@ -1282,8 +1288,7 @@ $(document).ready(function(){
 				}
 			});
 			if (format_invalid) {
-				console.debug('gettData: invalid entry format: '
-					+ entry + 'missing: ', secId, secEntry);
+				console.debug('gettData: invalid format: some entry ssing: ', secId, secEntry);
 				return null;
 			}
 
@@ -1458,11 +1463,11 @@ $(document).ready(function(){
 		},
 		restore: function (sourceSections, fn, with_overwrite) {
 			if (with_overwrite === undefined) {
-				with_overwrite = WITHOUT_OVERWRITE;
+				with_overwrite = this.WITHOUT_OVERWRITE;
 			}
 			if (fn === undefined) {
 				fn = null;
-			} else if (fn === WITH_OVERWRITE || fn === WITHOUT_OVERWRITE) {
+			} else if (fn === this.WITH_OVERWRITE || fn === this.WITHOUT_OVERWRITE) {
 				with_overwrite = fn;
 				fn = null;
 			}
@@ -1529,7 +1534,7 @@ $(document).ready(function(){
 
 		// saveData形式を生成:dataが与えられなければcreate,そうでない場合はreplace
 		createSaveData: function (data, srcDB, startSecNo, endSecNo) {
-			srcDB = (srcDB === undefined) ? this.sectionDB : sec_sections;
+			srcDB = (srcDB === undefined) ? this.sectionDB : srcDB;
 			startSecNo = (startSecNo === undefined) ? 1 : startSecNo;
 			endSecNo = (endSecNo === undefined) ? srcDB.length : endSecNo;
 			data = (data === undefined) ? {} : data;
@@ -1700,6 +1705,16 @@ $(document).ready(function(){
 			gGlobalSettingManager.save ('layout', gLayout);
 		}
 	};
+	// 判型可変化への対応
+	var gFlexibleAspect = false;
+	var setGlobalFlexibleAspect = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gFlexibleAspect = value;
+		if (with_save) {
+			gGlobalSettingManager.save ('flexibleAspect', gFlexibleAspect);
+		}
+	};
+
 	//ページ読み込み直後に開くかどうか
 	var gAlwaysOpen;	//
 	var setGlobalAlwaysOpen = function (value, with_save) {
@@ -1807,6 +1822,9 @@ $(document).ready(function(){
 		= ensureFactory (function (value) {
 			return (typeof value === 'boolean') ? value : undefined;
 		}, false);
+		var ensure_flexibleAspect = ensureFactory (function (value) {
+			return (typeof value === 'boolean') ? value : undefined;
+		}, true);
 		var ensure_alwayeOpen = ensureFactory (function (value) {
 			return (typeof value === 'boolean') ? value : undefined;
 		}, gSiteParser.alwaysOpenDefault);
@@ -1828,15 +1846,17 @@ $(document).ready(function(){
 			, gGlobalSettingManager.loadEnsure ('allpage', ensure_allpage)
 			, gGlobalSettingManager.loadEnsure ('yokogaki', ensure_yokogaki)
 			, gGlobalSettingManager.loadEnsure ('layout', ensure_layout)
+			, gGlobalSettingManager.loadEnsure ('flexibleAspect', ensure_flexibleAspect)
 			, gGlobalSettingManager.loadEnsure ('slidePos', ensure_slidePos)
 		).then (
-			function (fontType, alwaysOpen, allpage, yokogaki, layout, slidePos) {
+			function (fontType, alwaysOpen, allpage, yokogaki, layout, flexibleAspect, slidePos) {
 				//console.debug('save to local variable');
 				setGlobalFontType (fontType, WITHOUT_SAVE);
 				setGlobalAlwaysOpen (alwaysOpen, WITHOUT_SAVE);
 				setGlobalAllpage (allpage, WITHOUT_SAVE);
 				setGlobalYokogaki (yokogaki, WITHOUT_SAVE);
 				setGlobalLayout (layout, WITHOUT_SAVE);
+				setGlobalFlexibleAspect (flexibleAspect, WITHOUT_SAVE);
 				setGlobalSlidePos (slidePos, WITHOUT_SAVE);
 			}
 		).then(
@@ -1850,6 +1870,7 @@ $(document).ready(function(){
 				gGlobalSettingManager.save ('allpage', gAllpage);
 				gGlobalSettingManager.save ('yokogaki', gYokogaki);
 				gGlobalSettingManager.save ('layout', gLayout);
+				gGlobalSettingManager.save ('flexibleAspect', gFlexibleAspect);
 				gGlobalSettingManager.save ('slidePos', gSlidePos);
 			}
 		).then(function() {
@@ -2123,7 +2144,7 @@ $(document).ready(function(){
 		// div単位でsection毎にtreeでまとまっているなら
 		// 後からsortしてもよいのでは？(重複チェックが面倒か？)
 		// notifyはdb側のレコード更新のためのhook
-		margeSections: function (new_section, notifyFn) {
+		margeSections: function (new_sections, notifyFn) {
 			if (notifyFn === undefined) {
 				notifyFn = null;
 			}
@@ -2162,14 +2183,15 @@ $(document).ready(function(){
 				}
 			}
 		},
-		// この２つはtarget ctxが管理課のfile_mainになるのでgThemeManagerとは独立
-		// 引数のbindしていない後続部分はgThemeManagerと同一にしておくこと
-		// jQuery objectがうまく取れないようならprops側をgetter化して対応するので
-		// こちらは変えない。
-		setColorTheme: gThemeManager.applyColorTheme
-			.bind(gThemeManager, this.$),
-		resetColorTheme: gThemeManager.applyNone
-			.bind(gThemeManager, this.$),
+		// この２つはtarget ctxが管理下のfile_mainになるのでgThemeManagerとは独立
+		// 定義時点ではthis.$がnullになるのでbindで引数束縛するのはうまくいかない
+		// (呼び出されるタイミングではthis.$でjQueryオブジェクトを取れるが)
+		setColorTheme: function(theme) {
+			gThemeManager.applyColorTheme (this.$, theme);
+		},
+		resetColorTheme: function() {
+			gThemeManager.applyNone(this.$);
+		},
 		// dataRoot直下のdivから各download_sectionを取り出す
 		// 取り込みだけでsplitするのは凶悪なので呼出し側に任せる
 		// fnはsection毎のprogress
@@ -2240,7 +2262,7 @@ $(document).ready(function(){
 				}
 				return prev;
 			})(root.children('div'), secId);
-			var divHtml = gSectionmanager.toDivHtml (secId, secData, idPrefix);
+			var divHtml = gSectionManager.toDivHtml (secId, secData, idPrefix);
 			if (prev === null) {
 				root.prepend(divHtml);
 			} else {
@@ -2484,12 +2506,12 @@ $(document).ready(function(){
 		},
 	};
 
-	$.templates('twitterTextTmpl','#TwitterText');
 	var Twitter = {
-		tweetURL: 'http://twitter.com/intent/tweet',
+		$tweetURL: 'http://twitter.com/intent/tweet',
 		createURL: function (params) {
-			var text = $.render.twitterTextTmpl(params);
-			return Twitter.tweetURL + '?text=' + encodeURIComponent(text);
+			var text = $('#nojaTwitterText').render(params);
+			console.debug(text);
+			return this.$tweetURL + '?text=' + encodeURIComponent(text);
 		},
 	};
 
@@ -2910,7 +2932,7 @@ $(document).ready(function(){
 				// format mismatchでエラーが出ることはあるが無視
 			);
 		};
-		$.each(['#noja_yomikomi', '#noja_kokuhaku'], function(index, selecttor) {
+		$.each(['#noja_yomikomi', '#noja_kokuhaku'], function(index, selector) {
 			$(selector).on('click', app_builtin_content_load_handler);
 		});
 	};
@@ -3843,6 +3865,15 @@ $(document).ready(function(){
 			attr('action', this.$getNovelPointRegisterURL());
 		// divで場所だけ確保している部分
 		// loginしていればhiddenでtokenを埋め込む
+		console.debug($('#NarouNocMoonSite_vote_point').render({
+				login: this.siteInfo.login,
+				token: this.siteInfo.token,
+				type:  'submit',
+				id:    'pointinput',
+				class: 'button',
+				value: '評価する',
+		}));
+
 		h.find('.novel_hyouka .agree')
 			.html($('#NarouNocMoonSite_vote_point').render({
 				login: this.siteInfo.login,
@@ -4859,7 +4890,7 @@ $(document).ready(function(){
 		];
 		build_impression_review_submit (formsInfo, this);
 
-		this.$rebuild_twitter_link = (h.find('.hyouka_in:eq(1) > a'));
+		this.$rebuild_twitter_link(h.find('.hyouka_in:eq(1) > a'));
 	};
 
 
@@ -6157,6 +6188,62 @@ $(document).ready(function(){
 		);
 	};
 
+	// ss:eq(2)の中身
+	// table
+	//  tbody
+	//  tr-td-strongで章題
+	//  tr.bgcolor3なのがchapterで
+	//    tr.bgcolor3 > td:eq(0) > span#話数番号 > a
+	//    tr.bgcolor3 > td:eq(1) > nobr が日時text
+	//    tr.bgcolor3 > td:eq(1) > nobr > span[title]
+	//        titleに改稿日時情報
+	//        spanの子は(<p>改</p>)
+	//        nobr.text()だと初期日時+(改)の形式
+	//        (日時が初期公開日時のままなのだろう)
+	//        改稿がないときはnobrに子がない
+	//
+	//    bgcolor3の無いもので章を区切って
+	//    章間の領域をdiv配下に一段下げる？
+	//    table構造が破綻するからそれだとまずい
+	//    完全に作り替えないといけない
+	//    tr-td-strongを適当なheadingにする
+	//    tr.bgcolor3はまとめてtable-tbodyの下に配置する
+	//    (章毎のtable)
+	//    bgcolorは章毎に振りなおしたほうがいいのかも？
+
+	// @@TODO@@ パネル内がtableだと開くのが重いような気配
+	HamelnSite.prototype.$reformIndex = function (toc_index) {
+		var list = toc_index.find('tbody');
+		var chapterTitles = list.find('tr:has(strong)');
+		var endIndex = chapterTitles.size();
+		if (endIndex) {
+			// 
+			chapterTitles.each(function (index) {
+				var startPos = list.children().index($(this)) + 1;
+				var children;
+				if ((index + 1) == endIndex) {
+					children = list.children().slice(startPos);
+				} else {
+					var next = chapterTitles.eq(index + 1);
+					var endPos = list.children().index(next);
+					children = list.children().slice(startPos, endPos);
+				}
+				$(this).after($('<table />').append($('<tbody />').append(children)));
+				$(this).find('strong')
+					.addClass('noja_toc_index_chapter_title')
+					.unwrap().unwrap();
+			});
+			//
+			toc_index.find('>table > tbody').children().unwrap().unwrap();
+		}
+		// 元ページのスタイル指定を外すためにclassを消す
+		//toc_index.find('.novel_sublist2').removeClass('novel_sublist2');
+		//toc_index.find('.subtitle').removeClass('subtitle');
+		//toc_index.find('.long_update').removeClass('long_update');
+	};
+
+
+	//
 	// urlの絶対パス化(or index位置と元ページ位置の違いを補正)
 	// jumpしてほしいリンクには独自attrでジャンプ先を指定しておく
 	// (sectionNoを割り当てる)
@@ -6172,6 +6259,7 @@ $(document).ready(function(){
 			author:      info.find('a:eq(0)'),	// 本当はtitleの後というほうが正しい？
 			description: indexPage.find('div.ss:eq(1)'),	// 後ろにhrが付いている
 			index:       indexPage.find('div.ss:eq(2)'),
+			index_accordion_header: '>strong.noja_toc_index_chapter_title',
 		};
 		console.debug(tocInfo);
 
@@ -6180,6 +6268,8 @@ $(document).ready(function(){
 		// 本来はlink位置の調整がいるがroot path指定ならいらない
 		// authorのリンクはフルURLなので不要
 		// descriptionもすることがない
+
+		this.$reformIndex(tocInfo.index);
 
 		// index部分
 		// href無効化、css設定、click handler設定
@@ -7908,7 +7998,7 @@ $(document).ready(function(){
 			invertIfYokogaki = false;
 		}
 		if (invertIfYokogaki && gYokogaki) {
-			isNext = -isNext;
+			direction = -direction;
 		}
 		switch (direction) {
 		case self.NEXT_PAGE:
@@ -8032,7 +8122,7 @@ $(document).ready(function(){
 			}
 		}
 		if (gThemeManager.color.bgImage) {
-			var bgimage = gThemeManager.color.bgImage;
+			var bgImage = gThemeManager.color.bgImage;
 			var bgSize = {
 				width:  bgImage.width  * 2 * drawZoomRatio,
 				height: bgImage.height * 2 * drawZoomRatio,
@@ -8101,7 +8191,7 @@ $(document).ready(function(){
 		};
 		// @@TODO@@ 元はルート長方形固定だったがとりあえず限定解除してみる
 		var aspect = Math.sqrt(2);
-		if (gEnableFlexibleAspect) {
+		if (gFlexibleAspect) {
 			aspect = (pageSize.height / pageSize.width);
 		}
 		if ((size.height / size.width) > aspect) {
@@ -8803,7 +8893,7 @@ $(document).ready(function(){
 		var std_lc = (gYokogaki) ? STANDARD_LC_YOKOGAKI : STANDARD_LC_TATEGAKI;
 		//console.debug('zoomRatio:', zoomRatio);
 		lc.nchars = Math.floor (std_lc.nchars * (zoomRatio / 2.0));
-		if (gEnableFlexibleAspect) {
+		if (gFlexibleAspect) {
 			var aspect = (gMainSize.width / gMainSize.height);
 			//console.debug ("gMainSize, aspect:", gMainSize, aspect);
 			// ルビなしのカラムサイズで比率計算して、
@@ -8924,7 +9014,7 @@ $(document).ready(function(){
 		//  z-index:100; background-color:#CCC; overflow:hidden
 		//}
 		var aspect = Math.sqrt(2);
-		if (gEnableFlexibleAspect) {
+		if (gFlexibleAspect) {
 			aspect = (gMainSize.width / gMainSize.height);
 			//console.debug('aspect', aspect);
 		}
@@ -8969,7 +9059,7 @@ $(document).ready(function(){
 		// スタイル側は実サイズ(2倍する前にdict設定済)
 		$('#noja_canvas_main').css(style);
 
-		if (gEnableFlexibleAspect) {
+		if (gFlexibleAspect) {
 			// サイズに併せて更新しないとまずいか？
 			return updateLC(slidePos2ZoomRatio (gSlidePos), true);
 		}
@@ -9549,7 +9639,7 @@ $(document).ready(function(){
 			// thisに依存する場合まずいかも？
 			gSiteParser.autoPagerize (secId, secData);
 			return true;
-		} /* , WITHOUT_OVERWRITE */);
+		} /* , gSectionManager.WITHOUT_OVERWRITE */);
 		// SectionManagerへの登録が終わった後
 		//
 		// SectionManagerがdumpするsaveData形式は
@@ -9733,7 +9823,7 @@ $(document).ready(function(){
 				items = createBookList (data);
 			},
 			function () {
-				list = '';
+				return new $.Deferred().resolve();
 			}
 		).then(
 			function () {
@@ -10015,12 +10105,15 @@ $(document).ready(function(){
 			validateSetting ();
 			updateSettingMenuCheckbox (false);
 
+			// とりあえずaspectはグローバル
+			$('#noja_flexibleAspect').prop('checked', gFlexibleAspect);
+
 			$('#noja_always_open').prop('checked', gAlwaysOpen);
 			$('#noja_layout').prop('checked', gLayout);
-			$('#noja_mincho').prop('checked', gFontType === FONTTYPE_MINCHO);
 			$('#noja_yokogaki').prop('checked', gYokogaki);
-			$('#noja_gothic').prop('checked', gFontType === FONTTYPE_GOTHIC);
 			$('#noja_allpage').prop('checked', gAllpage);
+			$('#noja_mincho').prop('checked', gFontType === FONTTYPE_MINCHO);
+			$('#noja_gothic').prop('checked', gFontType === FONTTYPE_GOTHIC);
 
 			$('#noja_drag').css('left', gSlidePos - 5);
 
@@ -10078,7 +10171,7 @@ $(document).ready(function(){
 					if ($('#noja_hyouka').css('display') != 'none'
 						&& isForward
 						&& gIndexManager.isLastSection (gCurrentManager.id)
-						&& gCUrrentManager.isLastPage ()
+						&& gCurrentManager.isLastPage ()
 						) {
 						return;
 					}
@@ -10245,6 +10338,13 @@ $(document).ready(function(){
 			});
 			/////////////////////////////////////////////////
 			////// menu関連のcheckbox等
+			$('#noja_flexibleAspect').on('click', function() {
+				setGlobalFlexibleAspect ($(this).prop('checked'));
+				updateLC(slidePos2ZoomRatio (gSlidePos), true);
+				gSectionManager.reMake();
+				onResize();
+				goTo.CurrentSectionPageWithRedraw (FIRST_PAGE_NO);
+			});
 
 			$('#noja_maegaki').on('click', function() {
 				MaegakiAtogakiModeController.changeMaegaki ($(this).prop('checked'));

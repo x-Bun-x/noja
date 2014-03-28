@@ -15,7 +15,7 @@ $(document).ready(function(){
 
 	// constとして扱うものは全大文字
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var NOJA_VERSION = '1.13.901.2+p10+kai-p12';
+	var NOJA_VERSION = '1.13.901.2+p10+kai-p13';
 
 
 
@@ -6188,6 +6188,62 @@ $(document).ready(function(){
 		);
 	};
 
+	// ss:eq(2)の中身
+	// table
+	//  tbody
+	//  tr-td-strongで章題
+	//  tr.bgcolor3なのがchapterで
+	//    tr.bgcolor3 > td:eq(0) > span#話数番号 > a
+	//    tr.bgcolor3 > td:eq(1) > nobr が日時text
+	//    tr.bgcolor3 > td:eq(1) > nobr > span[title]
+	//        titleに改稿日時情報
+	//        spanの子は(<p>改</p>)
+	//        nobr.text()だと初期日時+(改)の形式
+	//        (日時が初期公開日時のままなのだろう)
+	//        改稿がないときはnobrに子がない
+	//
+	//    bgcolor3の無いもので章を区切って
+	//    章間の領域をdiv配下に一段下げる？
+	//    table構造が破綻するからそれだとまずい
+	//    完全に作り替えないといけない
+	//    tr-td-strongを適当なheadingにする
+	//    tr.bgcolor3はまとめてtable-tbodyの下に配置する
+	//    (章毎のtable)
+	//    bgcolorは章毎に振りなおしたほうがいいのかも？
+
+	// @@TODO@@ パネル内がtableだと開くのが重いような気配
+	HamelnSite.prototype.$reformIndex = function (toc_index) {
+		var list = toc_index.find('tbody');
+		var chapterTitles = list.find('tr:has(strong)');
+		var endIndex = chapterTitles.size();
+		if (endIndex) {
+			// 
+			chapterTitles.each(function (index) {
+				var startPos = list.children().index($(this)) + 1;
+				var children;
+				if ((index + 1) == endIndex) {
+					children = list.children().slice(startPos);
+				} else {
+					var next = chapterTitles.eq(index + 1);
+					var endPos = list.children().index(next);
+					children = list.children().slice(startPos, endPos);
+				}
+				$(this).after($('<table />').append($('<tbody />').append(children)));
+				$(this).find('strong')
+					.addClass('noja_toc_index_chapter_title')
+					.unwrap().unwrap();
+			});
+			//
+			toc_index.find('>table > tbody').children().unwrap().unwrap();
+		}
+		// 元ページのスタイル指定を外すためにclassを消す
+		//toc_index.find('.novel_sublist2').removeClass('novel_sublist2');
+		//toc_index.find('.subtitle').removeClass('subtitle');
+		//toc_index.find('.long_update').removeClass('long_update');
+	};
+
+
+	//
 	// urlの絶対パス化(or index位置と元ページ位置の違いを補正)
 	// jumpしてほしいリンクには独自attrでジャンプ先を指定しておく
 	// (sectionNoを割り当てる)
@@ -6203,6 +6259,7 @@ $(document).ready(function(){
 			author:      info.find('a:eq(0)'),	// 本当はtitleの後というほうが正しい？
 			description: indexPage.find('div.ss:eq(1)'),	// 後ろにhrが付いている
 			index:       indexPage.find('div.ss:eq(2)'),
+			index_accordion_header: '>strong.noja_toc_index_chapter_title',
 		};
 		console.debug(tocInfo);
 
@@ -6211,6 +6268,8 @@ $(document).ready(function(){
 		// 本来はlink位置の調整がいるがroot path指定ならいらない
 		// authorのリンクはフルURLなので不要
 		// descriptionもすることがない
+
+		this.$reformIndex(tocInfo.index);
 
 		// index部分
 		// href無効化、css設定、click handler設定
