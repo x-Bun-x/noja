@@ -2162,14 +2162,15 @@ $(document).ready(function(){
 				}
 			}
 		},
-		// この２つはtarget ctxが管理課のfile_mainになるのでgThemeManagerとは独立
-		// 引数のbindしていない後続部分はgThemeManagerと同一にしておくこと
-		// jQuery objectがうまく取れないようならprops側をgetter化して対応するので
-		// こちらは変えない。
-		setColorTheme: gThemeManager.applyColorTheme
-			.bind(gThemeManager, this.$),
-		resetColorTheme: gThemeManager.applyNone
-			.bind(gThemeManager, this.$),
+		// この２つはtarget ctxが管理下のfile_mainになるのでgThemeManagerとは独立
+		// 定義時点ではthis.$がnullになるのでbindで引数束縛するのはうまくいかない
+		// (呼び出されるタイミングではthis.$でjQueryオブジェクトを取れるが)
+		setColorTheme: function(theme) {
+			gThemeManager.applyColorTheme (this.$, theme);
+		},
+		resetColorTheme: function() {
+			gThemeManager.applyNone(this.$);
+		},
 		// dataRoot直下のdivから各download_sectionを取り出す
 		// 取り込みだけでsplitするのは凶悪なので呼出し側に任せる
 		// fnはsection毎のprogress
@@ -2484,12 +2485,12 @@ $(document).ready(function(){
 		},
 	};
 
-	$.templates('twitterTextTmpl','#TwitterText');
 	var Twitter = {
-		tweetURL: 'http://twitter.com/intent/tweet',
+		$tweetURL: 'http://twitter.com/intent/tweet',
 		createURL: function (params) {
-			var text = $.render.twitterTextTmpl(params);
-			return Twitter.tweetURL + '?text=' + encodeURIComponent(text);
+			var text = $('#nojaTwitterText').render(params);
+			console.debug(text);
+			return this.$tweetURL + '?text=' + encodeURIComponent(text);
 		},
 	};
 
@@ -2910,7 +2911,7 @@ $(document).ready(function(){
 				// format mismatchでエラーが出ることはあるが無視
 			);
 		};
-		$.each(['#noja_yomikomi', '#noja_kokuhaku'], function(index, selecttor) {
+		$.each(['#noja_yomikomi', '#noja_kokuhaku'], function(index, selector) {
 			$(selector).on('click', app_builtin_content_load_handler);
 		});
 	};
@@ -3843,6 +3844,15 @@ $(document).ready(function(){
 			attr('action', this.$getNovelPointRegisterURL());
 		// divで場所だけ確保している部分
 		// loginしていればhiddenでtokenを埋め込む
+		console.debug($('#NarouNocMoonSite_vote_point').render({
+				login: this.siteInfo.login,
+				token: this.siteInfo.token,
+				type:  'submit',
+				id:    'pointinput',
+				class: 'button',
+				value: '評価する',
+		}));
+
 		h.find('.novel_hyouka .agree')
 			.html($('#NarouNocMoonSite_vote_point').render({
 				login: this.siteInfo.login,
@@ -4859,7 +4869,7 @@ $(document).ready(function(){
 		];
 		build_impression_review_submit (formsInfo, this);
 
-		this.$rebuild_twitter_link = (h.find('.hyouka_in:eq(1) > a'));
+		this.$rebuild_twitter_link(h.find('.hyouka_in:eq(1) > a'));
 	};
 
 

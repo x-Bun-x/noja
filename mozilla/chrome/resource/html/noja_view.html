@@ -128,7 +128,7 @@
 <!-- section_no以外は普通に使っているsection objectのprops名そのまま -->
 <!-- 旧形式そのままなので修正がいる(現状旧なろうサイト用のまま) -->
 <!-- 貼り付け可能かどうかはサイトによる -->
-<script id="noja_data_section_template" type="text/x-jsrender">// <![CDATA[
+<script id="noja_data_section_template" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div>
 	{{if secData._maegaki}}
 		<div class="novel_p" data-noja="{{attr:secId}}">
@@ -153,12 +153,12 @@
 		</div>
 	{{/if}}
 </div>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 <!-- autpPagerize用:noja_download_file領域へ貼り付けるデータを生成 -->
 <!-- download用のデータ生成でも同じテンプレ -->
 <!-- subtitleとhonbunはノーチェック -->
-<script id="noja_section_div_template" type="text/x-jsrender">// <![CDATA[
+<script id="noja_section_div_template" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div id="{{attr:idPrefix}}section_{{attr:secId}}">
 	{{if secData._maegaki}}
 		<div class="{{attr:idPrefix}}maegaki">{{>secData._maegaki}}</div>
@@ -172,12 +172,12 @@
 		<div class="{{attr:idPrefix}}atogaki">{{>secData._atogaki}}</div>
 	{{/if}}
 </div>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
 
 <!-- download用 -->
-<script id="noja_download_data_template" type="text/x-jsrender">// <![CDATA[
+<script id="noja_download_data_template" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml">
 {{:downloadId}}
@@ -196,25 +196,25 @@
 	</div>
 </body>
 </html>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
-<script id="NarouSite_bookmark" type="text/x-jsrender">// <![CDATA[
+<script id="NarouSite_bookmark" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div>
 	<img src="{{url:src}}" alt="しおり" />
 	<a id="noja_shiori" target="_blank">しおりを挿む</a>
 </div>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
 
-<script id="AppModeSite_linkmenu" type="text/x-jsrender">// <![CDATA[
+<script id="AppModeSite_linkmenu" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div style="text-align:right; border-bottom-width:1px; border-bottom-style:solid;">
 	<a id="noja_closelink">[閉じる]</a>
 </div>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
-<script id="AppModeSite_import_menuitem" type="text/x-jsrender">// <![CDATA[
+<script id="AppModeSite_import_menuitem" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <h4>読み込み</h4>
 <div id="noja_file_back">
 <input id="noja_file" type="file" value="" accept="text/html, application/zip" multiple="true" >
@@ -222,27 +222,27 @@
 <br />
 <br />
 <a id="noja_yomikomi" noja_import_file_url="{{url:url}}">保存・読み込み機能について</a>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
-<script id="AppModeSite_saveload_booklist_menuitem" type="text/x-jsrender">// <![CDATA[
+<script id="AppModeSite_saveload_booklist_menuitem" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <br />
 <a id="noja_booklist">保存した小説リスト</a>
-// ]]></script>
-<script id="AppModeSite_version_extra_menuitem" type="text/x-jsrender">// <![CDATA[
+{{!-- ]]> --}}</script>
+<script id="AppModeSite_version_extra_menuitem" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <br />
 <br />
 <a id="noja_kokuhaku" noja_import_file_url="{{url:url}}">関係のない話</a>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
-<script id="TwitterText" type="text/x-jsrender">// <![CDATA[
+<script id="nojaTwitterText" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 {{:url}}\n
 「{{:title}}」読んだ！\n
 #{{:hash1}} #{{:hash2}}
-// ]]></script>
+{{!-- ]]> --}}</script>
 
-<script id="nojaBookListItem" type="text/x-jsrender">// <![CDATA[
+<script id="nojaBookListItem" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div id="noja_book_container_{{attr:id}}">
 	<a id="noja_book_delete_{{attr:id}}" class="noja_book_delete" noja_novel_id="{{attr:id}}">削除</a>
 	<a id="noja_book_{{attr:id}}" class="noja_book" noja_novel_id="{{attr:id}}">
@@ -250,10 +250,10 @@
 	</a>
 	　作者：{{>author}
 </div>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
-<script id="nojaBookListView" type="text/x-jsrender">// <![CDATA[
+<script id="nojaBookListView" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div class="noja_close_popup">
 	<a id="noja_closebv">[閉じる]</a>
 </div>
@@ -264,10 +264,10 @@
 	保存した小説はありません。
 {{/if}}
 </div>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 <!-- ポイント -->
-<script id="NarouNocMoonSite_vote_point" type="text/x-jsrender">// <![CDATA[
+<script id="NarouNocMoonSite_vote_point" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 {{if login}}
 <input type="hidden" value="{{attr:token}}" name="token" />
 <input type="{{attr:type}}" class="{{attr:class}}" value="{{attr:value}}" id="{{attr:id}}" />
@@ -275,11 +275,11 @@
 <input type="hidden" value="" name="token" />
 ※評価するにはログインしてください。
 {{/if}}
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
 <!-- ポイント -->
-<script id="NarouNocMoonSite_Radiobox" type="text/x-jsrender">// <![CDATA[
+<script id="NarouNocMoonSite_Radiobox" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div class="inline">
  <span class="RadioboxBigOrb">
   <input id="noja_bunsyopoint{{:score}}" class="InputHidden" name="{{:name}}"
@@ -299,19 +299,20 @@
  </span>
 </div>
 <div class="clr"></div>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
 <!-- ポイント -->
-<script id="NarouNocMoonSite_point_panel" type="text/x-jsrender">// <![CDATA[
+<script id="NarouNocMoonSite_point_panel" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div class="novel_hyouka">
  <div class="hyouka_h">評価</div>
-  <div class="hyouka_in">
+ <div class="hyouka_in">
   <span class="attention">ポイントを選んで「評価する」ボタンを押してください。</span>
   <br />
   <br />
   <form method="get" name="Myform" target="_blank" action="{{url:pointRegisterURL}}">
-   ▼この作品の書き方はどうでしたか？(文法・文章評価)<br />
+   ▼この作品の書き方はどうでしたか？(文法・文章評価)
+   <br />
    {{for bunsyopoint tmpl="NarouNocMoonSite_Radiobox" /}}
    <div style="padding-top:25px;">
     ▼物語(ストーリー)はどうでしたか？満足しましたか？(ストーリー評価)
@@ -327,41 +328,41 @@
     {{/if}}
    </div>
   </form>
-  </div>
-  <div class="hyouka_h">ついったーで読了宣言！</div>
-  <div class="hyouka_in">
+ </div>
+ <div class="hyouka_h">ついったーで読了宣言！</div>
+ <div class="hyouka_in">
   <a target="_blank">
    <img alt="ついったー" width="250" height="46" border="0" />
   </a>
   <br />
  </div>
 </div>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
 
 <!-- 感想・レビュー -->
-<script id="NarouNocMoonSite_login_warning" type="text/x-jsrender">// <![CDATA[
+<script id="NarouNocMoonSite_login_warning" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 ※{{>itemTitle}}を書く場合は
 <a href="{{url:loginURL}}" style="color:#0033cc;">ログイン</a>
 してください。<br />
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
 
 <!-- 感想・レビュー -->
-<script id="NocMoonSite_select_account_type" type="text/x-jsrender">// <![CDATA[
+<script id="NocMoonSite_select_account_type" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <select name="usertype">
  <option value="xuser">Xアカウントで書き込み</option>
  <option value="">通常アカウントで書き込み</option>
 </select>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 <!-- textareaのcols,rows指定はフォントサイズによってはレイアウト崩れになる -->
 
 <!-- 感想 -->
 <!-- noja_f_cr -->
-<script id="" type="text/x-jsrender">// <![CDATA[
+<script id="nojaFCR" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div class="hyoukanavi_title">―　感想を書く　―</div>
 <form method="post" target="_blank" action="{{url:confirmURL}}">
  <div style="text-align:left; margin-left:30px;">
@@ -396,12 +397,12 @@
   <input type="submit" class="button" value="感想を書く" id="impressionconfirm" />
  {{/if}}
 </form>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
 <!-- レビュー -->
 <!-- noja_r_fc : initial display:none -->
-<script id="" type="text/x-jsrender">// <![CDATA[
+<script id="nojaRFC" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div class="hyoukanavi_title">―　お薦めレビューを書く　―</div>
 <span class="attention">※</span>は必須項目です。
 <form id="formtable" method="post" target="_blank" action="{{url:confirmURL}}">
@@ -440,13 +441,9 @@
   <input type="submit" class="button" value="レビュー追加" id="reviewinput" />
  {{/if}}
 </form>
-// ]]></script>
+{{!-- ]]> --}}</script>
 
 
-<!--
-<script id="" type="text/x-jsrender">// <![CDATA[
-// ]]></script>
--->
 
 </div>
 <!-- end of templates -->
