@@ -15,7 +15,7 @@ $(document).ready(function(){
 
 	// constとして扱うものは全大文字
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var NOJA_VERSION = '1.13.901.2+p10+kai-p11';
+	var NOJA_VERSION = '1.13.901.2+p10+kai-p12';
 
 
 
@@ -592,8 +592,6 @@ $(document).ready(function(){
 	var alignLeft = function (x, ctx, text) {
 		return x;
 	};
-	// 判型可変化への対応
-	var gEnableFlexibleAspect = true;
 
 	//プロパティ
 	//
@@ -1707,6 +1705,16 @@ $(document).ready(function(){
 			gGlobalSettingManager.save ('layout', gLayout);
 		}
 	};
+	// 判型可変化への対応
+	var gFlexibleAspect = false;
+	var setGlobalFlexibleAspect = function (value, with_save) {
+		with_save = (with_save === undefined) ? true : with_save;
+		gFlexibleAspect = value;
+		if (with_save) {
+			gGlobalSettingManager.save ('flexibleAspect', gFlexibleAspect);
+		}
+	};
+
 	//ページ読み込み直後に開くかどうか
 	var gAlwaysOpen;	//
 	var setGlobalAlwaysOpen = function (value, with_save) {
@@ -1814,6 +1822,9 @@ $(document).ready(function(){
 		= ensureFactory (function (value) {
 			return (typeof value === 'boolean') ? value : undefined;
 		}, false);
+		var ensure_flexibleAspect = ensureFactory (function (value) {
+			return (typeof value === 'boolean') ? value : undefined;
+		}, true);
 		var ensure_alwayeOpen = ensureFactory (function (value) {
 			return (typeof value === 'boolean') ? value : undefined;
 		}, gSiteParser.alwaysOpenDefault);
@@ -1835,15 +1846,17 @@ $(document).ready(function(){
 			, gGlobalSettingManager.loadEnsure ('allpage', ensure_allpage)
 			, gGlobalSettingManager.loadEnsure ('yokogaki', ensure_yokogaki)
 			, gGlobalSettingManager.loadEnsure ('layout', ensure_layout)
+			, gGlobalSettingManager.loadEnsure ('flexibleAspect', ensure_flexibleAspect)
 			, gGlobalSettingManager.loadEnsure ('slidePos', ensure_slidePos)
 		).then (
-			function (fontType, alwaysOpen, allpage, yokogaki, layout, slidePos) {
+			function (fontType, alwaysOpen, allpage, yokogaki, layout, flexibleAspect, slidePos) {
 				//console.debug('save to local variable');
 				setGlobalFontType (fontType, WITHOUT_SAVE);
 				setGlobalAlwaysOpen (alwaysOpen, WITHOUT_SAVE);
 				setGlobalAllpage (allpage, WITHOUT_SAVE);
 				setGlobalYokogaki (yokogaki, WITHOUT_SAVE);
 				setGlobalLayout (layout, WITHOUT_SAVE);
+				setGlobalFlexibleAspect (flexibleAspect, WITHOUT_SAVE);
 				setGlobalSlidePos (slidePos, WITHOUT_SAVE);
 			}
 		).then(
@@ -1857,6 +1870,7 @@ $(document).ready(function(){
 				gGlobalSettingManager.save ('allpage', gAllpage);
 				gGlobalSettingManager.save ('yokogaki', gYokogaki);
 				gGlobalSettingManager.save ('layout', gLayout);
+				gGlobalSettingManager.save ('flexibleAspect', gFlexibleAspect);
 				gGlobalSettingManager.save ('slidePos', gSlidePos);
 			}
 		).then(function() {
@@ -8118,7 +8132,7 @@ $(document).ready(function(){
 		};
 		// @@TODO@@ 元はルート長方形固定だったがとりあえず限定解除してみる
 		var aspect = Math.sqrt(2);
-		if (gEnableFlexibleAspect) {
+		if (gFlexibleAspect) {
 			aspect = (pageSize.height / pageSize.width);
 		}
 		if ((size.height / size.width) > aspect) {
@@ -8820,7 +8834,7 @@ $(document).ready(function(){
 		var std_lc = (gYokogaki) ? STANDARD_LC_YOKOGAKI : STANDARD_LC_TATEGAKI;
 		//console.debug('zoomRatio:', zoomRatio);
 		lc.nchars = Math.floor (std_lc.nchars * (zoomRatio / 2.0));
-		if (gEnableFlexibleAspect) {
+		if (gFlexibleAspect) {
 			var aspect = (gMainSize.width / gMainSize.height);
 			//console.debug ("gMainSize, aspect:", gMainSize, aspect);
 			// ルビなしのカラムサイズで比率計算して、
@@ -8941,7 +8955,7 @@ $(document).ready(function(){
 		//  z-index:100; background-color:#CCC; overflow:hidden
 		//}
 		var aspect = Math.sqrt(2);
-		if (gEnableFlexibleAspect) {
+		if (gFlexibleAspect) {
 			aspect = (gMainSize.width / gMainSize.height);
 			//console.debug('aspect', aspect);
 		}
@@ -8986,7 +9000,7 @@ $(document).ready(function(){
 		// スタイル側は実サイズ(2倍する前にdict設定済)
 		$('#noja_canvas_main').css(style);
 
-		if (gEnableFlexibleAspect) {
+		if (gFlexibleAspect) {
 			// サイズに併せて更新しないとまずいか？
 			return updateLC(slidePos2ZoomRatio (gSlidePos), true);
 		}
@@ -10032,12 +10046,15 @@ $(document).ready(function(){
 			validateSetting ();
 			updateSettingMenuCheckbox (false);
 
+			// とりあえずaspectはグローバル
+			$('#noja_flexibleAspect').prop('checked', gFlexibleAspect);
+
 			$('#noja_always_open').prop('checked', gAlwaysOpen);
 			$('#noja_layout').prop('checked', gLayout);
-			$('#noja_mincho').prop('checked', gFontType === FONTTYPE_MINCHO);
 			$('#noja_yokogaki').prop('checked', gYokogaki);
-			$('#noja_gothic').prop('checked', gFontType === FONTTYPE_GOTHIC);
 			$('#noja_allpage').prop('checked', gAllpage);
+			$('#noja_mincho').prop('checked', gFontType === FONTTYPE_MINCHO);
+			$('#noja_gothic').prop('checked', gFontType === FONTTYPE_GOTHIC);
 
 			$('#noja_drag').css('left', gSlidePos - 5);
 
@@ -10262,6 +10279,13 @@ $(document).ready(function(){
 			});
 			/////////////////////////////////////////////////
 			////// menu関連のcheckbox等
+			$('#noja_flexibleAspect').on('click', function() {
+				setGlobalFlexibleAspect ($(this).prop('checked'));
+				updateLC(slidePos2ZoomRatio (gSlidePos), true);
+				gSectionManager.reMake();
+				onResize();
+				goTo.CurrentSectionPageWithRedraw (FIRST_PAGE_NO);
+			});
 
 			$('#noja_maegaki').on('click', function() {
 				MaegakiAtogakiModeController.changeMaegaki ($(this).prop('checked'));
