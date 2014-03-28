@@ -9566,7 +9566,7 @@ $(document).ready(function(){
 			// thisに依存する場合まずいかも？
 			gSiteParser.autoPagerize (secId, secData);
 			return true;
-		} /* , gSectionmanager.WITHOUT_OVERWRITE */);
+		} /* , gSectionManager.WITHOUT_OVERWRITE */);
 		// SectionManagerへの登録が終わった後
 		//
 		// SectionManagerがdumpするsaveData形式は
