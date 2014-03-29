@@ -14,6 +14,7 @@
 	"tabs",
 	"unlimitedStorage"
   ],
+  "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'",
   "icons":{
 	"16":"chrome/resource/images/ico16.png",
 	"48":"chrome/resource/images/ico48.png",

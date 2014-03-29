@@ -2502,6 +2502,7 @@ $(document).ready(function(){
 				if ($(menu).css('display') != 'none') {
 					return true;
 				}
+				return false;
 			});
 		},
 	};
@@ -2667,7 +2668,11 @@ $(document).ready(function(){
 		//
 		$reURL: /chrome:\/\/noja\/content\/app\/index\.html/,
 	};
+	// AppModeの時はparseURLはsupported判定にしか使わない
 	AppModeSite.parseURL = function (url, relative) {
+		if (noja_option.appmode) {
+			return true;	// not null
+		}
 		if (relative === true) {
 			if (url.startsWith('/')) {
 				url = url.slice(1);
@@ -3021,7 +3026,8 @@ $(document).ready(function(){
 		this.enableReputationForm = true;	// @@ ここをfalseにする @@
 		//
 		this.alwaysOpenDefault = false;
-
+		//
+		this.prefetchIndex = false;
 
 		var m = this.parseURL (url);
 		if (m) {
@@ -3382,7 +3388,7 @@ $(document).ready(function(){
 	// 絞るべきcontextは'#container'のレベルのようだ
 	// 短編と長編でタイトルを取れるdiv領域が違う等、
 	// これ以上は絞れない
-	NarouSite.prototype.$setupVolumeInfo = function (contents) {
+	NarouSite.prototype.$setupVolumeInfo = function (contents, header) {
 		// 目次は除外されているのでurlだけで短編確定した状態が正当と保証されている
 		//this.isSingleSection = this.$parseSectionType(contents);
 
@@ -3403,7 +3409,7 @@ $(document).ready(function(){
 		} else {
 			this.siteInfo.login = false;
 		}
-		t = contents.find('#head_nav a[href^="' + this.$getImpressionListBaseURL () + '"]');
+		t = header.find('#head_nav a[href^="' + this.$getImpressionListBaseURL () + '"]');
 		this.siteInfo.ncode2 = (t.size()) ? t.attr('href').match(/([0-9]*)\/$/)[1] : null;
 	};
 
@@ -3440,7 +3446,7 @@ $(document).ready(function(){
 			return dfrd.reject ();
 		}
 		var contents = $('#container');
-		this.$setupVolumeInfo (contents);
+		this.$setupVolumeInfo (contents, $('#novel_header'));
 		this.$updateThemeAtSection (contents);
 		this.$updateTitleAtSection (contents);
 
@@ -3464,14 +3470,16 @@ $(document).ready(function(){
 			}
 			// errorならそのまま？
 		);
-		if (!this.isSingleSection) {
-			this.loadIndex ().then(
-				function (tocInfo) {
-					// 登録処理
-					gIndexManager.registIndex (tocInfo);
-				}
-				// errorならそのまま？
-			);
+		if (this.prefecthIndex) {
+			if (!this.isSingleSection) {
+				this.loadIndex ().then(
+					function (tocInfo) {
+						// 登録処理
+						gIndexManager.registIndex (tocInfo);
+					}
+					// errorならそのまま？
+				);
+			}
 		}
 		////////////////////////////////////////
 		return dfrd.resolve ();
@@ -4035,8 +4043,8 @@ $(document).ready(function(){
 		this.enableReputationForm = true;	// @@ ここをfalseにする @@
 		// 起動時openのデフォルト
 		this.alwaysOpenDefault = false;
-
 		//
+		this.prefetchIndex = false;
 
 		var m = this.parseURL (url);
 		if (m) {
@@ -4380,7 +4388,7 @@ $(document).ready(function(){
 	// 絞るべきcontextは'#container'のレベルのようだ
 	// 短編と長編でタイトルを取れるdiv領域が違う等、
 	// これ以上は絞れない
-	NocMoonSite.prototype.$setupVolumeInfo = function (contents) {
+	NocMoonSite.prototype.$setupVolumeInfo = function (contents, header) {
 		// url判定で、(目次|短編) vs 連載で、isSingleSection自体は仮決定済
 		// min checkで目次を排除しているので、
 		// 実はisSingleSectionは調べるまでもなく最終決定済
@@ -4400,7 +4408,7 @@ $(document).ready(function(){
 		} else {
 			this.login = false;
 		}
-		t = contents.find('#head_nav a[href^="' + this.$getImpressionListBaseURL() + '"]');
+		t = header.find('#head_nav a[href^="' + this.$getImpressionListBaseURL() + '"]');
 		this.siteInfo.ncode2 = (t.size()) ? t.attr('href').match(/([0-9]*)\/$/)[1] : null;
 
 	};
@@ -4442,7 +4450,7 @@ $(document).ready(function(){
 		}
 		
 		var contents = $('#container');
-		this.$setupVolumeInfo (contents);
+		this.$setupVolumeInfo (contents, $('#novel_header'));
 		this.$updateThemeAtSection (contents);
 		this.$updateTitleAtSection (contents);
 		//
@@ -4465,14 +4473,16 @@ $(document).ready(function(){
 			}
 			// errorならそのまま？
 		);
-		if (!this.isSingleSection) {
-			this.loadIndex ().then(
-				function (tocInfo) {
-					// 登録処理
-					gIndexManager.registIndex (tocInfo);
-				}
-				// errorならそのまま？
-			);
+		if (this.prefecthIndex) {
+			if (!this.isSingleSection) {
+				this.loadIndex ().then(
+					function (tocInfo) {
+						// 登録処理
+						gIndexManager.registIndex (tocInfo);
+					}
+					// errorならそのまま？
+				);
+			}
 		}
 		////////////////////////////////////////
 		return dfrd.resolve ();
@@ -4995,6 +5005,8 @@ $(document).ready(function(){
 		this.enableReputationForm = false;
 		//
 		this.alwaysOpenDefault = false;
+		//
+		this.prefetchIndex = false;
 
 		var m = this.parseURL (url);
 		if (m) {
@@ -5777,6 +5789,7 @@ $(document).ready(function(){
 		//
 		this.alwaysOpenDefault = false;
 		//
+		this.prefetchIndex = false;
 
 		// 連載の基礎判定はここでする
 		// 短編or目次系ページの判定は中身次第
@@ -6157,14 +6170,16 @@ $(document).ready(function(){
 
 		////////////////////////////////////////
 		// 文章ページと確定したので目次を取得する
-		if (!this.isSingleSection) {
-			this.loadIndex ().then(
-				function (tocInfo) {
-					// 登録処理
-					gIndexManager.registIndex (tocInfo);
-				}
-				// errorならそのまま？
-			);
+		if (this.prefetchIndex) {
+			if (!this.isSingleSection) {
+				this.loadIndex ().then(
+					function (tocInfo) {
+						// 登録処理
+						gIndexManager.registIndex (tocInfo);
+					}
+					// errorならそのまま？
+				);
+			}
 		}
 		//////////////////////////////////////
 		return dfrd.resolve ();
@@ -6379,6 +6394,7 @@ $(document).ready(function(){
 
 
 	////////////////////////////////////////////////////////////
+	// @@ TODO @@ 一時封印
 
 	function PixivSite(url, templates) {
 		this.cls = PixivSite;
@@ -6434,7 +6450,8 @@ $(document).ready(function(){
 		this.enableReputationForm = false;
 		//
 		this.alwaysOpenDefault = false;
-
+		//
+		this.prefetchIndex = false;
 
 		var m = this.parseURL (url);
 		if (m) {
@@ -6455,7 +6472,13 @@ $(document).ready(function(){
 		// http://www.pixiv.net/novel/show.php?id={{:novelId}}
 		$reURL: /http:\/\/www\.pixiv\.net\/novel\/show.php\?id=(\d+)/,
 	};
+	// @@ TODO @@ 一時封印
+	PixivSite.available = false;
+
 	PixivSite.parseURL = function (url, relative) {
+		if (!this.available) {
+			return null;
+		}
 		if (relative === true) {
 			if (url.startsWith('/')) {
 				url = url.slice(1);
@@ -6859,7 +6882,8 @@ $(document).ready(function(){
 		this.enableReputationForm = false;
 		//
 		this.alwaysOpenDefault = false;
-
+		//
+		this.prefetchIndex = false;
 
 		var m = this.parseURL (url);
 		if (m) {
@@ -7842,7 +7866,7 @@ $(document).ready(function(){
 			gSiteParser.getNovelSection (secNo).then (
 				function (secData) {
 					// 登録でstatusも更新される
-					var secData
+					secData
 						= gSectionManager.registData (secNo, secData, true);
 					gSiteParser.autoPagerize (secNo, secData);
 					gSiteParser.updateMaxSection(secNo);
