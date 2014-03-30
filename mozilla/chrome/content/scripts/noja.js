@@ -980,6 +980,7 @@ $(document).ready(function(){
 					gSectionManager.debugDump();
 				} else {
 					this.updateTotalPages(gSetting);
+					// lazy化した場合はcache purgeするだけかな
 					if (with_updatePageNavigation === true) {
 						gPageNavigationManager.update();
 					}
@@ -2027,6 +2028,7 @@ $(document).ready(function(){
 	// 値を管理するのは別にサイト側objectでする必要はない
 	// 内部形式同士の場合はbgColor,bgImageで
 	// cssの場合はbackground-color等
+	// cssでbackground: #fff url()は簡略形式らしい
 	// backgroundColorはDOM？
 	var gThemeManager = {
 		color: {
@@ -2035,20 +2037,38 @@ $(document).ready(function(){
 			bgImage: null,
 		},
 		// onLoad handlerはどうせ変更することはなかろう
-		onLoadHandler: showPage,
+		// ああ、これだと定義順序依存性がある
+		// 多分宣言しただけの状態でundefinedだ
+		// @@ TODO @@ initから呼ばれるinitializerがいる?
 
 		$setBackgroundByUrl: function (theme, url) {
-			theme.bgImage = $('<img>').get(0).attr('src', url);
-			if (this.onLoadHander !== undefined) {
-				theme.bgImage.on('load', this.onLoadHandler);
+			var m = /^"([^"]+)"$/.exec(url);
+			if (m) {
+				url = m[1];
 			}
+			// 
+			// 先にイベントハンドラをセットしておかないと
+			// タイミングによって発火しないことがある
+			theme.bgImage = $('<img />');
+			//使うときにcompleteチェックしてまだならその時点でbindするので
+			// ここでは不要になった
+			// bind load->set srcの順にしないとcacheがらみ等で問題が出ることが
+			// あるので要注意
+			//theme.bgImage.on('load', function () {
+			//	//
+			//});
+			theme.bgImage.attr('src', url);
 			return theme;
 		},
 
 		// 引数は([theme], props|jquery)で省略時はthis.color
 		// 省略時の戻りはthisそのもの(theme指定時はthemeを戻す)
 		// bgImageを設定した時、bgColorを適切に設定するのは呼出し側の責務
+		//
 		// ただし、ctxの場合はこちらで行う
+		// siteParserの初期化段階では
+		// colorとbgColor : body[cssのbackground-color]が設定され
+		// まだこの段階ではbgImageは設定されない
 		setColorTheme: function (theme, props) {
 			var ret = theme;
 			if (props === undefined) {
@@ -2064,12 +2084,14 @@ $(document).ready(function(){
 				$.extend(theme, props);
 				if (theme.bgImage !== null
 					&& theme.bgImage !== 'none' && theme.bgImage !== '') {
+					console.log(theme.bgImage);
 					this.$setBackgroundByUrl(theme, theme.bgImage);
-					// theme.bgColor = '#ffffff';
+					theme.bgColor = '#ffffff';
 				}
 			}
 			return ret;
 		},
+		// これはsiteParserのupdateThemeAtSectionから呼ばれる
 		setBackground: function (theme, ctx) {
 			var ret = theme;
 			if (ctx === undefined) {
@@ -2083,7 +2105,9 @@ $(document).ready(function(){
 				|| theme.bgImage === 'none' || theme.bgImage === '') {
 				theme.bgImage = null;
 			} else {
-				var url = this.bgImage.match(/^url\(([^\)]*)\)/)[1];
+				var url = theme.bgImage.match(/^url\(([^\)]*)\)/)[1];
+				console.debug(theme.bgImage);
+				console.debug(url);
 				this.$setBackgroundByUrl (theme, url);
 				theme.bgColor = '#ffffff';
 			}
@@ -7404,6 +7428,8 @@ $(document).ready(function(){
 		// どちらかといえば呼出し側でコントロールするほうが
 		// 外部参照の関係性が低減できる
 		// 少しここが重すぎるかも？
+		// lazy化する場合はここはcache purgeして枠確保するだけ
+		// panel open時点で非同期にdrawPageを開始する
 		update: function() {
 			var navi = navigationFrame.$div();
 			navi.empty();
@@ -7526,12 +7552,15 @@ $(document).ready(function(){
 			page_no: page_no,
 		};
 		return function() {
-			// 実際に表示しようとしたload時のhook
+			// load完了時のイベント
 			if (gCurrentManager.id == ctx.section_id) {
 				if (gCurrentManager.page == ctx.page_no) {
 					// canvasエリア描画がトリガー
+					// 表示中のページだったら再描画がいる
+					// showPage()内でサムネ側も再描画
 					showPage();
 				} else {
+					// ページナビのサムネはその他のページの場合も再描画
 					// jump sliderページの表示がトリガー
 					gPageNavigationManager.drawPage (ctx.page_no);
 				}
@@ -7543,7 +7572,7 @@ $(document).ready(function(){
 		return $('<img>')
 			.attr('src', url)
 			.on('load', imageLoadHandlerFactory (section_id, page_no))
-			.get(0)
+			.get(0)	// DOM nodeで返す
 		;
 	};
 	// '<img>'要素を直接データとして置くのでこのオブジェクトになる
@@ -8181,15 +8210,21 @@ $(document).ready(function(){
 			}
 		}
 		if (gThemeManager.color.bgImage) {
-			var bgImage = gThemeManager.color.bgImage;
-			var bgSize = {
-				width:  bgImage.width  * 2 * drawZoomRatio,
-				height: bgImage.height * 2 * drawZoomRatio,
-			};
-			if (bgSize.width && bgSize.height) {
-				for (var yy = 0; yy < drawCanvasSize.height; yy += bgSize.height) {
-					for (var xx = 0; xx < drawCanvasSize.width; xx += bgSize.width) {
-						ctx.drawImage (bgImage, xx, yy, bgSize.width, bgSize.height);
+			var bgImage = gThemeManager.color.bgImage.get(0);
+			// まだload完了してなかったら再度呼ばれるように設定
+			if (!bgImage.complete) {
+				gThemeManager.color.bgImage.on('load', showPage());
+			} else {
+				var bgSize = {
+					width:  bgImage.width  * 2 * drawZoomRatio,
+					height: bgImage.height * 2 * drawZoomRatio,
+				};
+				console.debug(bgSize);
+				if (bgSize.width && bgSize.height) {
+					for (var yy = 0; yy < drawCanvasSize.height; yy += bgSize.height) {
+						for (var xx = 0; xx < drawCanvasSize.width; xx += bgSize.width) {
+							ctx.drawImage (bgImage, xx, yy, bgSize.width, bgSize.height);
+						}
 					}
 				}
 			}
@@ -8709,11 +8744,14 @@ $(document).ready(function(){
 
 			// 選んだ領域の該当ページにimgがあった場合の処理
 			// ノンブル等もなしでベタの1page画像
+			// 中身がDOM nodeそのもの(Image objectそのもの)
 			if (isImagePage (pageText.bodyLines)) {
 				// drawZoomRatioはdrawPageの引数でデフォルト1
 				//  page index部の場合に使われる
 				// 2倍サイズで計算(canvas自体が2倍サイズなので)
 				var image = pageText.bodyLines;
+				// lazy化した場合、ここでcompleteを見て、未完ならbind
+				// 完了していれば通常の処理
 				var image_size = calcEmbeddedImageSize (
 					{
 						width: image.width * 2 * drawZoomRatio,
@@ -8870,9 +8908,16 @@ $(document).ready(function(){
 	////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////
 	// 画像のonLoad等のハンドラとしてもbindされてredrawを行う
+	// なるべく再描画は避けたいものの、
+	// 画像非ロード時:とりあえず書けるだけ書く
+	// 終わったら書き直し
+	// というのがブラウザでの当たり前の非同期
+	// それとメイン画面とサブ(thumb)が連動するのでここでそれを扱うのが正義
 	showPage = function() {
 		console.debug('showPage', gCurrentManager.page);
 		drawPage(gMainContext, gCharFontSize, gMainSize, gCurrentManager.page);
+		// lazy化する場合はこれは不要
+		// ナビ側も再描画しておく
 		gPageNavigationManager.drawPage(gCurrentManager.page);
 	};
 
@@ -9143,6 +9188,7 @@ $(document).ready(function(){
 			// page数も変わるのでリセットされてしょうがない
 			gCurrentManager.setCurrent (gCurrentManager.id);
 			gCurrentManager.updateTotalPages(gSetting);
+			//lazy化した場合はcache purge的な処理を呼び出すことになる
 			gPageNavigationManager.update();
 			goTo.CurrentSectionPageWithRedraw (FIRST_PAGE_NO);
 		}
