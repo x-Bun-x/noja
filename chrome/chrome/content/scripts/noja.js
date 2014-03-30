@@ -15,7 +15,7 @@ $(document).ready(function(){
 
 	// constとして扱うものは全大文字
 	//バージョンはアップデートの前に書き換えろよ！　絶対だかんな！
-	var NOJA_VERSION = '1.13.901.2+p10+kai-p13';
+	var NOJA_VERSION = '1.13.901.2+p10+kai-p14';
 
 
 
@@ -945,7 +945,7 @@ $(document).ready(function(){
 				// 短編
 				gIndexManager.setIndexPageDisabled ();
 				gIndexManager.forceSetGeneralAllNo(1);
-				this.setCurrent (1);
+				this.setCurrent (1, false);
 			} else {
 				// 連載
 				gIndexManager.setIndexPageNotReady();
@@ -956,7 +956,15 @@ $(document).ready(function(){
 		},
 
 		// 値コピーじゃなくてrefを設定するだけでいいのかも？
-		setCurrent: function (secId, pageNo) {
+		// (secId, [pageNo = 0], [with_updatePageNavigation = true])
+		setCurrent: function (secId, pageNo, with_updatePageNavigation) {
+			if (pageNo === true || pageNo === false) {
+				with_updatePageNavigation = pageNo;
+				pageNo = undefined;
+			}
+			if (with_updatePageNavigation === undefined) {
+				with_updatePageNavigation = true;
+			}
 			if (pageNo === undefined) {
 				pageNo = 0;
 			}
@@ -972,7 +980,9 @@ $(document).ready(function(){
 					gSectionManager.debugDump();
 				} else {
 					this.updateTotalPages(gSetting);
-					gPageNavigationManager.update();
+					if (with_updatePageNavigation === true) {
+						gPageNavigationManager.update();
+					}
 				}
 			}
 		},
@@ -2316,17 +2326,27 @@ $(document).ready(function(){
 		////
 		show: function () {
 			$('#noja_container').show(rootFrame.duration);
+			return this;
 		},
 		showNow: function () {
 			$('#noja_container').show();
+			return this;
 		},
 		hide: function () {
 			$('#noja_container').hide(rootFrame.duration);
+			return this;
 		},
 		hideNow: function () {
 			$('#noja_container').hide();
+			return this;
 		},
 		////
+		initialGetSize: function () {
+			return {
+				width: $('#noja_container').width(),
+				height: $('#noja_container').height(),
+			};
+		},
 	};
 
 	var navigationFrame = {
@@ -3139,7 +3159,7 @@ $(document).ready(function(){
 		// ここでsetだとnullのsplitをしにいくのであまりよくないが…
 		gCurrentManager.setSingleSection (this.isSingleSection);
 		if (!this.isSingleSection) {
-			gCurrentManager.setCurrent (this.secNo);
+			gCurrentManager.setCurrent (this.secNo, false);
 		}
 
 		gThemeManager.setColorTheme({
@@ -3454,7 +3474,7 @@ $(document).ready(function(){
 		gSectionManager.registData (gCurrentManager.id
 			, this.$parseHtmlCommon (contents, gCurrentManager.id));
 		//
-		gCurrentManager.setCurrent (gCurrentManager.id);
+		gCurrentManager.setCurrent (gCurrentManager.id, false);
 		// autoPagerが貼り付ける先に独自attrを付ける
 		$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a')
 			.attr('data-noja', gCurrentManager.id);
@@ -4157,7 +4177,7 @@ $(document).ready(function(){
 		// 無駄な動きをするが実害はないのでここで呼び出してもOk
 		gCurrentManager.setSingleSection (this.isSingleSection);
 		if (!this.isSingleSection) {
-			gCurrentManager.setCurrent (this.secNo);
+			gCurrentManager.setCurrent (this.secNo, false);
 		}
 
 		gThemeManager.setColorTheme({
@@ -4443,6 +4463,7 @@ $(document).ready(function(){
 
 
 	NocMoonSite.prototype.parseInitialPage = function () {
+		console.time('parseInitialPage: pre parse');
 		var dfrd = new $.Deferred ();
 		if (!$('#novel_honbun').size()) {
 			// 目次ページを排除
@@ -4454,10 +4475,17 @@ $(document).ready(function(){
 		this.$updateThemeAtSection (contents);
 		this.$updateTitleAtSection (contents);
 		//
-		gSectionManager.registData (gCurrentManager.id
-			, this.$parseHtmlCommon(contents, gCurrentManager.id));
+		console.timeEnd('parseInitialPage: pre parse');
+		console.time('parseInitialPage: parse');
+		var secData = this.$parseHtmlCommon(contents, gCurrentManager.id);
+		console.timeEnd('parseInitialPage: parse');
+		console.time('parseInitialPage: regist');
+		gSectionManager.registData (gCurrentManager.id, secData);
+		console.timeEnd('parseInitialPage: regist');
 		//
-		gCurrentManager.setCurrent (gCurrentManager.id);
+		console.time('parseInitialPage: set current');
+		gCurrentManager.setCurrent (gCurrentManager.id, false);
+		console.timeEnd('parseInitialPage: set current');
 		// autoPagerが貼り付ける先に独自attrを付ける
 		$('.novel_subtitle, #novel_honbun, #novel_p, #novel_a')
 			.attr('data-noja', gCurrentManager.id);
@@ -4466,10 +4494,12 @@ $(document).ready(function(){
 		// maxNoは取ってしまう
 		// 短編のときには実際には不要だが
 		// 念のため取得してチェックする
+		console.time('parseInitialPage: get max via API');
 		var self = this;
 		this.$fetchMaxSectionNo ().then(
 			function (maxSectionNo) {
 				// fetch側で設定は行っているので他にすることはない
+				console.timeEnd('parseInitialPage: get max via API');
 			}
 			// errorならそのまま？
 		);
@@ -5092,7 +5122,7 @@ $(document).ready(function(){
 		//$('#novelnavi_right').append(getNojaLabel());
 
 		gCurrentManager.setSingleSection (false);
-		gCurrentManager.setCurrent (this.currentSectionId);
+		gCurrentManager.setCurrent (this.currentSectionId, false);
 
 		gThemeManager.setColorTheme({
 			color: '#000',
@@ -5415,7 +5445,7 @@ $(document).ready(function(){
 
 		gSectionManager.registData (gCurrentManager.id
 			, this.$parseHtmlCommon (story, novels, gCurrentManager.id));
-		gCurrentManager.setCurrent (gCurrentManager.id);
+		gCurrentManager.setCurrent (gCurrentManager.id, false);
 		gSectionManager.debugDump();
 
 		// autoPagerが貼り付ける先に独自attrを付ける
@@ -5870,7 +5900,7 @@ $(document).ready(function(){
 		//$('#novelnavi_right').append(getNojaLabel());
 		gCurrentManager.setSingleSection (this.isSingleSection);
 		if (!this.isSingleSection) {
-			gCurrentManager.setCurrent (this.secId);
+			gCurrentManager.setCurrent (this.secId, false);
 		}
 		gThemeManager.setColorTheme({
 			color: '#000',
@@ -6160,7 +6190,7 @@ $(document).ready(function(){
 
 		gSectionManager.registData (gCurrentManager.id
 			, this.$parseHtmlCommon (contents, gCurrentManager.id));
-		gCurrentManager.setCurrent (gCurrentManager.id);
+		gCurrentManager.setCurrent (gCurrentManager.id, false);
 
 		// autoPagerが貼り付ける先に独自attrを付ける
 		if (false) {
@@ -6521,9 +6551,9 @@ $(document).ready(function(){
 	PixivSite.prototype.initialize = function () {
 		//$('#novelnavi_right').append(getNojaLabel());
 		gCurrentManager.setSingleSection (this.isSingleSection);
-		gCurrentManager.setCurrent (this.secId);
+		gCurrentManager.setCurrent (this.secId, false);
 		//if (!this.isSingleSection) {
-		//	gCurrentManager.setCurrent (this.secId);
+		//	gCurrentManager.setCurrent (this.secId, false);
 		//}
 		gThemeManager.setColorTheme({
 			color: '#000',
@@ -6729,7 +6759,7 @@ $(document).ready(function(){
 
 		gSectionManager.registData (gCurrentManager.id
 			, this.$parseHtmlCommon (login, novelInfo, contents, gCurrentManager.id));
-		gCurrentManager.setCurrent (gCurrentManager.id);
+		gCurrentManager.setCurrent (gCurrentManager.id, false);
 
 		// autoPagerが貼り付ける先に独自attrを付ける
 		if (false) {
@@ -6952,7 +6982,7 @@ $(document).ready(function(){
 	ArcadiaSite.prototype.initialize = function () {
 		//$('#novelnavi_right').append(getNojaLabel());
 		gCurrentManager.setSingleSection (this.isSingleSection);
-		gCurrentManager.setCurrent (this.secId);
+		gCurrentManager.setCurrent (this.secId, false);
 		gThemeManager.setColorTheme({
 			color: '#000',
 			bgColor: $('body').css('background-color'),
@@ -7149,7 +7179,7 @@ $(document).ready(function(){
 
 		gSectionManager.registData (gCurrentManager.id
 			, this.$parseHtmlCommon (contents, tocInfo, gCurrentManager.id));
-		gCurrentManager.setCurrent (gCurrentManager.id);
+		gCurrentManager.setCurrent (gCurrentManager.id, false);
 
 		gIndexManager.registIndex (this.$parseIndexPage (tocInfo));
 
@@ -7369,6 +7399,11 @@ $(document).ready(function(){
 		// ・フォントサイズ等viewパラメータの変化
 		// ・セクション移動
 		// に付随して呼ばれるべきもの
+		// ThumbPageはlc,frame等に影響されるのでcacheするとしたら
+		// keyをうまく作らないといけない
+		// どちらかといえば呼出し側でコントロールするほうが
+		// 外部参照の関係性が低減できる
+		// 少しここが重すぎるかも？
 		update: function() {
 			var navi = navigationFrame.$div();
 			navi.empty();
@@ -9013,21 +9048,19 @@ $(document).ready(function(){
 		);
 	};
 	////////////////////////////////////////////////////////
-	var updateMainSize = function () {
+	// 親containerがhideだと、その中身のmainのwidth,heightが正しく取れない
+	var updateMainSize = function (size) {
+		if (size === undefined) {
+			size = {
+				width: $('#noja_main').width(),
+				height: $('#noja_main').height(),
+			};
+		}
 		// どうもobjで書き換えるとpropがうまく更新されない感じがある
-		//console.debug ("gMainSize", gMainSize);
-		//console.debug ("gMainSize.width, .height", gMainSize.width, gMainSize.height);
-		//console.debug ("#noja main width, .height"
-		//	, $('#noja_main').width(), $('#noja_main').height());
-		gMainSize.width = $('#noja_main').width();
-		gMainSize.height = $('#noja_main').height();
-		//console.debug ("gMainSize", gMainSize);
-		//console.debug ("gMainSize.width, .height", gMainSize.width, gMainSize.height);
-
-		//console.debug ("#noja main width, .height"
-		//	, $('#noja_main').width(), $('#noja_main').height());
-		//console.debug ("gMainSize", gMainSize);
-		//console.debug ("gMainSize.width, .height", gMainSize.width, gMainSize.height);
+		// そうではなくて、console表示に登録した時の状態と
+		// inspectした状態の食い違い
+		gMainSize.width = size.width;
+		gMainSize.height = size.height;
 
 		var style;
 		// 親のnoja_mainが
@@ -10064,7 +10097,8 @@ $(document).ready(function(){
 		// initializeのstage1
 		// グローバル設定の読み込み完了後にここにくる
 		var initialize_stage1 = function() {
-			console.debug('initialize stage 1');
+			console.time('initialize_stage1: pre deferred');
+			console.log('initialize stage 1');
 			// 少しだけuiがらみの設定をする
 			// ページ末尾にのじゃー作業用の領域を確保
 			$('body').append(ResourceManager.load (NOJA_VIEW_HTML));
@@ -10075,8 +10109,11 @@ $(document).ready(function(){
 
 			// これがないと計算ができないので位置を移動
 			// initialpageの解析→登録→splitterでサイズがいる
-			updateMainSize ();
-			console.debug ("gMainSize", gMainSize);
+			var size = rootFrame.initialGetSize();
+			console.debug ("got container width, .height"
+			, size.width, size.height);
+			updateMainSize (size);
+			console.dir ("gMainSize", gMainSize);
 			console.debug ("gMainSize.width, .height", gMainSize.width, gMainSize.height);
 			console.debug ("#noja main width, .height"
 			, $('#noja_main').width(), $('#noja_main').height());
@@ -10095,6 +10132,8 @@ $(document).ready(function(){
 			} else {
 				dfrd.resolve();
 			}
+			console.timeEnd('initialize_stage1: pre deferred');
+			console.time('initialize_stage1: deferred');
 			// カスタム設定が終わったら初期ページ解析
 			dfrd.then (
 				// 元ページ解析
@@ -10119,6 +10158,8 @@ $(document).ready(function(){
 		// メニュー関連の設定やイベントハンドラ等UIがらみの設定が中心
 		// 設定したりないメニュー関連等を設定する
 		var initialize_stage2 = function() {
+			console.timeEnd('initialize_stage1: deferred');
+			console.time('initialize_stage2');
 			console.debug ('initialize stage2');
 			console.debug ("gMainSize", gMainSize);
 			console.debug ("gMainSize.width, .height", gMainSize.width, gMainSize.height);
@@ -10622,6 +10663,7 @@ $(document).ready(function(){
 			console.debug('stage2: site and book specific ui initialize');
 			gSiteParser.uiCustomSetup ();
 			//////////////////////////////////////////////
+			console.timeEnd('initialize_stage2');
 			// 次stageへ
 			initialize_stage3 ();
 		};
@@ -10640,6 +10682,7 @@ $(document).ready(function(){
 		///////////////////////////////////////////////////////////
 		// 初期化完了手前の最終段階
 		var initialize_stage4 = function() {
+			console.time('initialize_stage4: part1');
 			console.debug ("gMainSize", gMainSize);
 			console.debug ("gMainSize.width, .height", gMainSize.width, gMainSize.height);
 			console.debug ("#noja main width, .height"
@@ -10647,27 +10690,39 @@ $(document).ready(function(){
 			//
 			console.debug('stage4: PageNavigation update');
 			gCurrentManager.updateTotalPages(gSetting);
+			console.timeEnd('initialize_stage4: part1');
+			// onResize自体はopen時に呼ばれるがremake不要の時はPageNaviは更新されない
+			// そのため、明示的にPageNaviをupdateしておく必要がある
+			// (open時のonResizeで必ずremake&updateする状況なら無駄)
+			console.time('initialize_stage4: part2');
 			gPageNavigationManager.update();
+			console.timeEnd('initialize_stage4: part2');
 			///////////////////////////////////////////////////
 			// 設定が終わったのでresizeでジオメトリを更新
+			console.time('initialize_stage4: part3');
 			console.debug('stage4: onResize');
-			onResize();
+			// openでresizeする
+			//onResize();
+			console.timeEnd('initialize_stage4: part3');
 			// ある条件のときのみ非同期になるなら
 			// $.Deferred().resolve().promise()を入れるよりも
 			// $.when()にDeferred,promiseでないものを与えた時の
 			// 即時resolveとして扱う仕様を使うほうがいいか？
+			console.time('initialize_stage4: part4');
 			var dfrd = null;	// as resolved immediately
 			if (gSetting.autoRestore) {
 				dfrd = nojaRestore(gSiteParser.getNovelId(), false);
 			}
 			$.when(dfrd).then(
 				function() {
+					console.timeEnd('initialize_stage4: part4');
 					if (gSetting.autoSave) {
 						nojaSave(false);
 					}
 					if (gAlwaysOpen) {
 						rootFrame.$().ready(nojaOpen());
 					}
+					// これはあまり正しくない位置
 					gSiteParser.onReadyNoja();
 				}
 			);
