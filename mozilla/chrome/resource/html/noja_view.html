@@ -159,18 +159,19 @@
 <!-- autpPagerize用:noja_download_file領域へ貼り付けるデータを生成 -->
 <!-- download用のデータ生成でも同じテンプレ -->
 <!-- subtitleとhonbunはノーチェック -->
+<!-- 本文系はbr等を含み普通のhtmlの状態。その他はraw text前提 -->
 <script id="noja_section_div_template" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <div id="{{attr:idPrefix}}section_{{attr:secId}}">
 	{{if secData._maegaki}}
-		<div class="{{attr:idPrefix}}maegaki">{{>secData._maegaki}}</div>
+		<div class="{{attr:idPrefix}}maegaki">{{:secData._maegaki}}</div>
 	{{/if}}
 	{{if secData.chapter_title}}
-		<div class="{{attr:idPrefix}}chapter_title">{{>sectData.chapter_title}}</div>
+		<div class="{{attr:idPrefix}}chapter_title">{{>secData.chapter_title}}</div>
 	{{/if}}
-	<div class="{{attr:idPrefix}}subtitle">{{>secData.subtitle}}</div>\
-	<div class="{{attr:idPrefix}}honbun">{{>secData._honbun}}</div>
+	<div class="{{attr:idPrefix}}subtitle">{{>secData.subtitle}}</div>
+	<div class="{{attr:idPrefix}}honbun">{{:secData._honbun}}</div>
 	{{if secData._atogaki}}
-		<div class="{{attr:idPrefix}}atogaki">{{>secData._atogaki}}</div>
+		<div class="{{attr:idPrefix}}atogaki">{{:secData._atogaki}}</div>
 	{{/if}}
 </div>
 {{!-- ]]> --}}</script>
@@ -180,9 +181,10 @@
 <!-- download用 -->
 <script id="noja_download_data_template" type="text/x-jsrender">{{!-- <![CDATA[ --}}
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml">
-{{:downloadId}}
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
 <!--
+{{:downloadId}}
 {{:info}}
 -->
 <head>

@@ -1418,13 +1418,20 @@ $(document).ready(function(){
 				fn(secId, secEntry.secData);
 			});
 		},
-		rangedEach: function (min, max, fn) {
-			for (var i = min; i <= max; ++i) {
-				if (i in this.sectionDB
-					&& this.sectionDB[i].status === this.SECTION_STATUS_READY) {
-					if (!fn (i, this.sectionDB[i].secData)) {
-						break;
+		idsEach: function (ids, fn) {
+			console.debug('ids, length', ids, ids.length);
+			for (var i = 0; i < ids.length; ++i) {
+				var id = ids[i];
+				if (id in this.sectionDB) {
+					if (this.sectionDB[id].status === this.SECTION_STATUS_READY) {
+						if (!fn (id, this.sectionDB[id].secData)) {
+							break;
+						}
+					} else {
+						console.debug('id, status', id, this.sectionDB[id].status);
 					}
+				} else {
+					console.debug('id is not in DB', this.sectionDB);
 				}
 			}
 		},
@@ -1435,9 +1442,10 @@ $(document).ready(function(){
 			});
 		},
 
-		length: function () {
-			return this.sectionDB.length;
+		allIds: function () {
+			return Object.keys(this.sectionDB);
 		},
+
 		// 用途によって、idがある(がnull)のminを探したい場合と
 		// 完全にデータがreadyのものを探したい場合があるかも？
 		minId: function () {
@@ -1456,7 +1464,6 @@ $(document).ready(function(){
 		// 改行削除だけ行う
 		// jQuery objectを戻すほうは改行除去はなかったが
 		// 機能としては共通化しても問題ないはずなので統一
-		renderToHtmlDiv: $.templates('noja_section_div_template'),
 		toDivHtml: function (secId, secData, prefix) {
 			var param = {
 				idPrefix: prefix,
@@ -1470,7 +1477,7 @@ $(document).ready(function(){
 						= param.secData[key].replace(RE_G_LINEBREAK, '');
 				}
 			});
-			return this.renderToHtmlDiv(param);
+			return $('#noja_section_div_template').render(param);
 		},
 		restore: function (sourceSections, fn, with_overwrite) {
 			if (with_overwrite === undefined) {
@@ -1566,7 +1573,7 @@ $(document).ready(function(){
 			data.color = gThemeManager.color.color;
 			// 内部形式でのdumpになる
 			data.bgColor = gThemeManager.color.bgColor;
-			data.auther = gSiteParser.getAuthor();
+			data.author = gSiteParser.getAuthor();
 			data.bgImage = gThemeManager.color.bgImage
 				? $(gThemeManager.color.bgImage).attr('src') : null;
 
@@ -2776,6 +2783,18 @@ $(document).ready(function(){
 		this.prepareUiOnCloseNoja ();
 	};
 
+	AppModeSite.prototype.getHeaderInfo = function () {
+		return {
+			version: NOJA_VERSION,
+			site: [this.siteInfo.site, this.siteInfo.site2],
+			ncode: [this.siteInfo.ncode, this.siteInfo.ncode2],
+			author: gSiteParser.getAuthor(),
+			// このあたりは内部で持っている情報に切り替えるべし
+			general_all_no: gIndexManager.GeneralAllNo,
+			tanpen: gCurrentManager.isSingleSection,
+		};
+	},
+
 	// ncode,ncode2,site,site2はいる
 	AppModeSite.prototype.getNovelId = function () {
 		return this.siteInfo.ncode;
@@ -3254,6 +3273,17 @@ $(document).ready(function(){
 		return dfrd.promise ();
 	};
 
+	NarouSite.prototype.getHeaderInfo = function () {
+		return {
+			version: NOJA_VERSION,
+			site: [this.siteInfo.site, this.siteInfo.site2],
+			ncode: [this.siteInfo.ncode, this.siteInfo.ncode2],
+			author: gSiteParser.getAuthor(),
+			// このあたりは内部で持っている情報に切り替えるべし
+			general_all_no: gIndexManager.GeneralAllNo,
+			tanpen: gCurrentManager.isSingleSection,
+		};
+	},
 
 	// ncode,ncode2,site,site2はいる
 	NarouSite.prototype.getNovelId = function () {
@@ -3740,7 +3770,7 @@ $(document).ready(function(){
 
 	NarouSite.prototype.uiCustomSetup = function () {
 		// 初期化段階でのメニューカスタマイズ
-		this.$setupLinkMenu ($('noja_link'));
+		this.$setupLinkMenu ($('#noja_link'));
 		this.$buildReputationForm ();
 	};
 
@@ -3776,7 +3806,10 @@ $(document).ready(function(){
 	// 元の構造はnoja_view.html側で定義されている
 	NarouSite.prototype.$setupLinkMenu = function (linkmenu) {
 		var a = linkmenu.find('a');
+		console.debug(linkmenu);
+		console.debug(a);
 		var loginOrUserTop = this.$getLoginOrUserTopInfo();
+		console.debug(loginOrUserTop);
 		a.eq(1).attr('href', loginOrUserTop.url).text(loginOrUserTop.text);
 		a.eq(2).attr('href', this.$getNovelViewInfotopURL());
 		a.eq(3).attr('href', this.$getImpressionListURL());
@@ -4274,6 +4307,17 @@ $(document).ready(function(){
 
 
 
+	NocMoonSite.prototype.getHeaderInfo = function () {
+		return {
+			version: NOJA_VERSION,
+			site: [this.siteInfo.site, this.siteInfo.site2],
+			ncode: [this.siteInfo.ncode, this.siteInfo.ncode2],
+			author: gSiteParser.getAuthor(),
+			// このあたりは内部で持っている情報に切り替えるべし
+			general_all_no: gIndexManager.GeneralAllNo,
+			tanpen: gCurrentManager.isSingleSection,
+		};
+	},
 
 
 	// ncode,ncode2,site,site2はいる
@@ -4762,7 +4806,7 @@ $(document).ready(function(){
 
 	NocMoonSite.prototype.uiCustomSetup = function () {
 		// 初期化段階でのメニューカスタマイズ
-		this.$setupLinkMenu ($('noja_link'));
+		this.$setupLinkMenu ($('#noja_link'));
 		this.$buildReputationForm ();
 	};
 
@@ -5180,6 +5224,17 @@ $(document).ready(function(){
 	};
 
 
+	AkatsukiSite.prototype.getHeaderInfo = function () {
+		return {
+			version: NOJA_VERSION,
+			site: [this.siteInfo.site, this.siteInfo.site2],
+			ncode: [this.siteInfo.ncode, this.siteInfo.ncode2],
+			author: gSiteParser.getAuthor(),
+			// このあたりは内部で持っている情報に切り替えるべし
+			general_all_no: gIndexManager.GeneralAllNo,
+			tanpen: gCurrentManager.isSingleSection,
+		};
+	},
 
 
 	// ncode,ncode2,site,site2はいる
@@ -5750,7 +5805,7 @@ $(document).ready(function(){
 
 	AkatsukiSite.prototype.uiCustomSetup = function () {
 		// 初期化段階でのメニューカスタマイズ
-		this.$setupLinkMenu ($('noja_link'));
+		this.$setupLinkMenu ($('#noja_link'));
 		this.$buildReputationForm ();
 	};
 
@@ -5949,6 +6004,19 @@ $(document).ready(function(){
 	HamelnSite.prototype.onCloseNoja = function () {
 		this.prepareUiOnCloseNoja ();
 	};
+
+
+	HamelnSite.prototype.getHeaderInfo = function () {
+		return {
+			version: NOJA_VERSION,
+			site: [this.siteInfo.site, this.siteInfo.site2],
+			ncode: [this.siteInfo.ncode, this.siteInfo.ncode2],
+			author: gSiteParser.getAuthor(),
+			// このあたりは内部で持っている情報に切り替えるべし
+			general_all_no: gIndexManager.GeneralAllNo,
+			tanpen: gCurrentManager.isSingleSection,
+		};
+	},
 
 	// ncode,ncode2,site,site2はいる
 	HamelnSite.prototype.getNovelId = function () {
@@ -6427,7 +6495,7 @@ $(document).ready(function(){
 
 	HamelnSite.prototype.uiCustomSetup = function () {
 		// 初期化段階でのメニューカスタマイズ
-		this.$setupLinkMenu ($('noja_link'));
+		this.$setupLinkMenu ($('#noja_link'));
 		this.$buildReputationForm ();
 	};
 
@@ -6600,6 +6668,18 @@ $(document).ready(function(){
 		this.prepareUiOnCloseNoja ();
 	};
 
+
+	PixivSite.prototype.getHeaderInfo = function () {
+		return {
+			version: NOJA_VERSION,
+			site: [this.siteInfo.site, this.siteInfo.site2],
+			ncode: [this.siteInfo.ncode, this.siteInfo.ncode2],
+			author: gSiteParser.getAuthor(),
+			// このあたりは内部で持っている情報に切り替えるべし
+			general_all_no: gIndexManager.GeneralAllNo,
+			tanpen: gCurrentManager.isSingleSection,
+		};
+	},
 
 	// ncode,ncode2,site,site2はいる
 	PixivSite.prototype.getNovelId = function () {
@@ -6858,7 +6938,7 @@ $(document).ready(function(){
 
 	PixivSite.prototype.uiCustomSetup = function () {
 		// 初期化段階でのメニューカスタマイズ
-		this.$setupLinkMenu ($('noja_link'));
+		this.$setupLinkMenu ($('#noja_link'));
 		this.$buildReputationForm ();
 	};
 
@@ -7028,6 +7108,18 @@ $(document).ready(function(){
 		this.prepareUiOnCloseNoja ();
 	};
 
+
+	ArcadiaSite.prototype.getHeaderInfo = function () {
+		return {
+			version: NOJA_VERSION,
+			site: [this.siteInfo.site, this.siteInfo.site2],
+			ncode: [this.siteInfo.ncode, this.siteInfo.ncode2],
+			author: gSiteParser.getAuthor(),
+			// このあたりは内部で持っている情報に切り替えるべし
+			general_all_no: gIndexManager.GeneralAllNo,
+			tanpen: gCurrentManager.isSingleSection,
+		};
+	},
 
 	// ncode,ncode2,site,site2はいる
 	ArcadiaSite.prototype.getNovelId = function () {
@@ -7280,7 +7372,7 @@ $(document).ready(function(){
 
 	ArcadiaSite.prototype.uiCustomSetup = function () {
 		// 初期化段階でのメニューカスタマイズ
-		this.$setupLinkMenu ($('noja_link'));
+		this.$setupLinkMenu ($('#noja_link'));
 		this.$buildReputationForm ();
 	};
 
@@ -9328,15 +9420,7 @@ $(document).ready(function(){
 		// @@ TODO @@ template化
 		// site固有情報とgenericな情報をどう分けるか？
 		$createDownloadHeader: function () {
-			return JSON.stringify({
-				version: NOJA_VERSION,
-				site: [gSiteParser.getSite(), gSiteParser.getSite2()],
-				ncode: [gSiteParser.getNovelId(), gSiteParser.getNovelId2()],
-				general_all_no: gIndexManager.GeneralAllNo,
-				// @@ 互換性のためtypoをそのまま残すか？
-				auther: gSiteParser.getAuthor(),
-				tanpen: gCurrentManager.isSingleSection,
-			});
+			return JSON.stringify(gSiteParser.getHeaderInfo());
 		},
 		// @@ 互換性のためtypoをそのまま残すか？(auther)
 		// isIndexPageReadyの評価部分が少しview側に依存した感じ
@@ -9348,7 +9432,7 @@ $(document).ready(function(){
 			infos.ncode  = json.ncode[0];
 			infos.ncode2 = json.ncode[1];
 			//
-			infos.author = json.auther;
+			infos.author = (json.author) ? json.author : json.auther;
 			infos.generalAllNo = json.general_all_no;
 			infos.isIndexPageReady = json.tanpen;	// 名称変換
 			return infos;
@@ -9374,6 +9458,8 @@ $(document).ready(function(){
 				? this.$createImportedInfoFromJSON (json) : false;
 		},
 
+		// @@TODO@@ マルチ話数の場合の対応がいる
+		// サイト切り替えをどうするか？
 		nojaImport: function (htmldoc) {
 			console.debug('gHtmlPortManager.nojaImport with:', htmldoc);
 			var dfrd = new $.Deferred();
@@ -9496,18 +9582,20 @@ $(document).ready(function(){
 
 		// sectionがidタイプだと範囲指定が難しい
 		// もう少しbreak-downしてcontainerで渡されたものをdumpする？
-		renderDownloadData: $.templates('#noja_download_data_template'),
-		createDownloadData: function (minSec, maxSec) {
+		// これを直さないといけない
+		createDownloadData: function (ids) {
 			var idPrefix = 'noja_download_';
 			// ここの部分はjsRenderのforとincludeで賄える話なのかもしれず
 			// html取り込み時に正しく改行除去してあれば
 			// あとはifとforで済む話
 			var secDataHtml = '';
-			gSectionManager.rangedEach (minSec, maxSec, function (secId, secData) {
+			gSectionManager.idsEach (ids, function (secId, secData) {
 				secDataHtml += gSectionManager.toDivHtml (secId, secData, idPrefix);
+				return true;
 			});
+			console.debug(secDataHtml);
 			// 実際のrendering
-			var buffer = this.renderDownloadData({
+			var buffer = $('#noja_download_data_template').render({
 				downloadId: DOWNLOAD_ID,
 				id: idPrefix + 'file_main',
 				info: gHtmlPortManager.$createDownloadHeader(),
@@ -9515,6 +9603,7 @@ $(document).ready(function(){
 				style: gThemeManager.toTextColorTheme(),
 				contents: secDataHtml,
 			});
+			console.debug(buffer);
 			// 単独で閉じるタグの形式を整形式にしておく
 			return new Blob(
 				[buffer.replace(/(<br|<img[^>]*)>/g, '$1 />')]
@@ -9607,7 +9696,7 @@ $(document).ready(function(){
 			// @@ 互換性のためautherのtypoをそのまま残すか？
 			register_data = {
 				title: gSiteParser.getTitle(),
-				auther: gSiteParser.getAuthor(),
+				author: gSiteParser.getAuthor(),
 				savetime: parseInt((new Date()) / 1000),
 			};
 		}
@@ -9808,7 +9897,7 @@ $(document).ready(function(){
 			});
 			// 画面側('#noja'はapp/index.html
 			gThemeManager.applyColorTheme($('#noja'));
-			gSiteParser.setAuthor (restoreData.auther);
+			gSiteParser.setAuthor (restoreData.author ? restoreData.author : restoreData.auther);
 			return first_avail_section;
 		} else {
 			// novelIdが変わらなかった場合
@@ -9894,7 +9983,7 @@ $(document).ready(function(){
 			items.push({
 				id: key,
 				title: value.title,
-				author: value.auther,
+				author: (value.author) ? value.author : value.auther,
 				savetime: value.savetime,
 			});
 		});
@@ -10020,7 +10109,7 @@ $(document).ready(function(){
 						readFile(fileSpec)
 						// 読めたらgHtmlPortManager.nojaImportを呼ぶ
 						// 読めなければnofity経由でcancel問い合わせ
-						.then(gHtmlPortManager.nojaImport, function(err) {
+						.then(gHtmlPortManager.nojaImport.bind(gHtmlPortManager), function(err) {
 							// read fail
 							console.debug('readFile error occured', err);
 							if (errorHandler('readError')) {
@@ -10649,27 +10738,31 @@ $(document).ready(function(){
 				nojaRestore(gSiteParser.getNovelId());
 			});
 
-			// @@ TODO @@ start,endの概念が1～maxに依存している
-			var createDownloadLink = function (start, end, suffix) {
+			// @@ TODO @@ 
+			// 暁の場合はid!=話数なので単純にidsをsortしてはいけないが未対応
+			var createDownloadLink = function (ids, suffix) {
+				console.debug('ids, suffix=', ids, suffix);
+				// 破壊的にidsを数値ソートする
+				ids.sort(function (a, b) {return a - b;});
 				return $('<a>').attr({
-					url: URL.createObjectURL(gHtmlPortManager.createDownloadData(start, end)),
+					href: URL.createObjectURL(gHtmlPortManager.createDownloadData(ids)),
 					download: gSiteParser.getTitle() + suffix + '.noja.html',
-				}).get(0);
+				});
 			};
 
-			var handle_DownloadDispatchHandler = function (start, end, suffix) {
+			var handle_DownloadDispatchHandler = function (ids, suffix) {
 				suffix = (suffix === undefined || suffix === null) ? '' : suffix;
 				var evt = document.createEvent('MouseEvents');
 				evt.initMouseEvent('click', true, true, window
 					, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
-				createDownloadLink(start, end, suffix).dispatchEvent(evt);
+				createDownloadLink(ids, suffix).get(0).dispatchEvent(evt);
 			};
 
 			$('#noja_download').on('click', function() {
-				handle_DownloadDispatchHandler (1, gSectionManager.length() - 1);
+				handle_DownloadDispatchHandler (gSectionManager.allIds());
 			});
 			$('#noja_download2').on('click', function() {
-				handle_DownloadDispatchHandler (1, gSectionManager.length() - 1
+				handle_DownloadDispatchHandler (gSectionManager.allIds()
 					, '(' + getDateTimeNow() + ')');
 			});
 			$('#noja_download3').on('click', function() {
@@ -10678,8 +10771,8 @@ $(document).ready(function(){
 				gSectionManager.each(function (secId, secData) {
 					$('#noja_dv_main')
 						.append(
-							createDownloadLink(secId, secId, 
-									+ ' - ' + secId + ' - '
+							createDownloadLink([secId],
+									' - ' + secId + ' - '
 									+ secData.subtitle
 							).html('' + secId + '. ' + secData.subtitle)
 						).append('<br>');
